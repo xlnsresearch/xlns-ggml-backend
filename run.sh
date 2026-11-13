@@ -6,18 +6,20 @@
 #   ./run.sh --sum-mode=sum32         # pick a summation-variant binary
 #   ./run.sh --sum-mode=all           # run the same prompt across all four variants
 #   ./run.sh --backend=32             # LNS32; default -n 4
-#   ./run.sh --backend=cuda16         # LNS16 arithmetic on the GPU (build with ./setup.sh --cuda)
+#   ./run.sh --backend=cuda16 --sum-mode=monte   # LNS16 on the GPU (./setup.sh --cuda);
+#                                     # cuda16 has the same 4 modes as the CPU
 #   ./run.sh -m ./other.gguf -n 40
 #   ./run.sh -p "Hello" -- --temp 0.2 # extra args after -- go to llama-completion
 #
 # Summation mode is compile-time: ./setup.sh builds one binary per mode under
-# build/llama.cpp/build-lns-{base,monte,lpvip,sum32}; this script only selects
-# among them.
+# build/llama.cpp/build-lns-{base,monte,lpvip,sum32}; this script selects among
+# them and checks (llama-completion --list-devices) that the binary really
+# runs that mode. GGML_LNS_BACKEND (--backend) selects the devices inside it.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-LLAMA_BUILD_ROOT="$REPO_ROOT/build/llama.cpp"
+LLAMA_BUILD_ROOT="${LLAMA_BUILD_ROOT:-$REPO_ROOT/build/llama.cpp}"
 DEFAULT_MODEL="$REPO_ROOT/SmolLM2-135M-Instruct-Q4_K_M.gguf"
 ALL_MODES=(base monte lpvip sum32)
 
@@ -42,7 +44,8 @@ Options:
   --backend=B         LNS backend (default: 16, or $GGML_LNS_BACKEND):
                         16      LNS16 on the CPU
                         32      LNS32 on the CPU
-                        cuda16  LNS16 arithmetic on a CUDA GPU (alias: cuda)
+                        cuda16  LNS16 arithmetic on a CUDA GPU (alias: cuda);
+                                sum modes base|monte|lpvip|sum32, as on the CPU
                         cuda32  LNS32 arithmetic on a CUDA GPU
                       The GPU backends need ./setup.sh --cuda; ops they do not
                       implement run on the matching CPU LNS backend.
@@ -160,12 +163,20 @@ case "$SUM_MODE" in
 esac
 
 case "$BACKEND" in
-    16|32|cuda|cuda16|cuda32) ;;
+    16|32|cuda16|cuda32) ;;
+    cuda) BACKEND=cuda16 ;;
     *)
         echo "ERROR: --backend must be 16, 32, cuda16 or cuda32 (got '$BACKEND')" >&2
         exit 1
         ;;
 esac
+
+if [ "$BACKEND" = 32 ] || [ "$BACKEND" = cuda32 ]; then
+    if [ "$SUM_MODE" != base ]; then
+        echo "NOTE: --sum-mode does not apply to --backend=$BACKEND (xlns32 has one summation); running once" >&2
+    fi
+    [ "$SUM_MODE" = all ] && SUM_MODE=base
+fi
 
 if [ "$N_TOKENS_SET" -eq 0 ]; then
     if [ "$BACKEND" = "32" ]; then
@@ -175,25 +186,40 @@ if [ "$N_TOKENS_SET" -eq 0 ]; then
     fi
 fi
 
-# Locate the binary for one sum mode; falls back to the legacy single-build
-# path (build-lns) when the per-mode directory does not exist yet.
+# The binary for one sum mode, checked against what it reports: the device
+# for the backend must exist and the xlns16 devices must say sum=<mode>. The
+# legacy build-lns path is used only if it passes the same check.
 bin_for_mode() {
-    local mode="$1"
-    local bin="$LLAMA_BUILD_ROOT/build-lns-$mode/bin/llama-completion"
-    if [ -x "$bin" ]; then
+    local mode="$1" bin dev
+    case "$BACKEND" in
+        16) dev=LNS16 ;; 32) dev=LNS32 ;; cuda16) dev=LNSCUDA16 ;; cuda32) dev=LNSCUDA32 ;;
+    esac
+    for bin in "$LLAMA_BUILD_ROOT/build-lns-$mode/bin/llama-completion" "$LLAMA_BUILD_ROOT/build-lns/bin/llama-completion"; do
+        [ -x "$bin" ] || continue
+        local devices
+        devices="$("$bin" --list-devices 2>/dev/null)" || continue
+        if ! printf '%s\n' "$devices" | grep -q "^ *$dev:"; then
+            echo "NOTE: $bin has no $dev device (built without --cuda, or no usable GPU)" >&2
+            continue
+        fi
+        if [ "$dev" = LNS16 ] || [ "$dev" = LNSCUDA16 ]; then
+            if ! printf '%s\n' "$devices" | grep "^ *\(LNS16\|$dev\):" | grep -qv "sum=$mode[,)]" &&
+               printf '%s\n' "$devices" | grep -q "^ *LNS16:.*sum=$mode[,)]"; then
+                echo "$bin"
+                return 0
+            fi
+            echo "NOTE: $bin does not run sum=$mode" >&2
+            continue
+        fi
         echo "$bin"
         return 0
+    done
+    echo "ERROR: no llama-completion under $LLAMA_BUILD_ROOT runs --backend=$BACKEND with sum mode '$mode'." >&2
+    if [ "$BACKEND" = cuda16 ] || [ "$BACKEND" = cuda32 ]; then
+        echo "Build it with: ./setup.sh --cuda --sum-mode=$mode" >&2
+    else
+        echo "Build it with: ./setup.sh --sum-mode=$mode" >&2
     fi
-    local legacy="$LLAMA_BUILD_ROOT/build-lns/bin/llama-completion"
-    if [ -x "$legacy" ]; then
-        echo "NOTE: build-lns-$mode not built; using legacy build-lns binary" >&2
-        echo "$legacy"
-        return 0
-    fi
-    echo "ERROR: llama-completion not found at:" >&2
-    echo "  $bin" >&2
-    echo "Run ./setup.sh first to build it (all modes), or" >&2
-    echo "  ./setup.sh --sum-mode=$mode  for just this variant." >&2
     return 1
 }
 

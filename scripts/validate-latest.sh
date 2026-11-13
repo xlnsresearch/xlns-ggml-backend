@@ -4,7 +4,13 @@
 # Usage:
 #   MODEL_SMOLLM=/path/SmolLM2-135M-Instruct-Q4_K_M.gguf \
 #   MODEL_LLAMA32=/path/Llama-3.2-1B-Instruct-Q4_K_M.gguf \
-#   ./scripts/validate-latest.sh
+#   ./scripts/validate-latest.sh [--cuda]
+#
+# --cuda also builds LNSCUDA16/32 and runs the GPU parity tests for the GPU
+# modes (base, monte, lpvip, sum32) and GPU inference; it needs an NVIDIA GPU (set
+# CUDAHOSTCXX to a host compiler nvcc accepts, e.g. /usr/bin/g++-12).
+# xlnscpp / xlnscuda are cloned under build/validate-latest/ (the repo's
+# submodules are not touched).
 #
 # Exits 0 only if unit test + both inference runs succeed.
 
@@ -12,9 +18,13 @@ set -e
 set -o pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-XLNSCPP_DIR="$REPO_ROOT/xlnscpp"
 XLNSCPP_BASE_COMMIT="$(cat "$REPO_ROOT/patches/xlnscpp-base-commit.txt")"
+XLNSCUDA_BASE_COMMIT="$(cat "$REPO_ROOT/patches/xlnscuda-base-commit.txt")"
 BUILD_DIR="$REPO_ROOT/build/validate-latest"
+XLNSCPP_DIR="$BUILD_DIR/xlnscpp"
+XLNSCUDA_DIR="$BUILD_DIR/xlnscuda"
+LNS_CUDA=0
+[ "${1:-}" = "--cuda" ] && LNS_CUDA=1
 LOG_FILE="$BUILD_DIR/validate-latest.log"
 
 MODEL_SMOLLM="${MODEL_SMOLLM:-$REPO_ROOT/SmolLM2-135M-Instruct-Q4_K_M.gguf}"
@@ -49,23 +59,31 @@ log() { echo "$@" | tee -a "$LOG_FILE"; }
 # shellcheck source=integrate-lns.sh
 source "$REPO_ROOT/scripts/integrate-lns.sh"
 
-prepare_xlnscpp() {
-    if [ ! -d "$XLNSCPP_DIR/.git" ]; then
-        git -C "$REPO_ROOT" submodule update --init
-    fi
-    cd "$XLNSCPP_DIR"
-    git fetch origin
-    git reset --hard origin/main
-    XLNSCPP_SHA=$(git rev-parse HEAD)
-    log "    xlnscpp at $XLNSCPP_SHA"
+# dep_at DIR URL REF — isolated clone at REF (origin/main or a pin)
+dep_at() {
+    local dir="$1" url="$2" ref="$3"
+    [ -d "$dir/.git" ] || git clone "$url" "$dir" || return 1
+    git -C "$dir" fetch origin || return 1
+    git -C "$dir" reset -q --hard "$ref" && git -C "$dir" clean -qfd || return 1
 }
 
-fallback_xlnscpp() {
-    log "    xlnscpp latest failed; using pinned commit"
-    cd "$XLNSCPP_DIR"
-    git reset --hard "$XLNSCPP_BASE_COMMIT"
-    XLNSCPP_SHA=$(git rev-parse HEAD)
+prepare_deps() {
+    local cpp_ref="$1" cuda_ref="$2"
+    dep_at "$XLNSCPP_DIR" https://github.com/xlnsresearch/xlnscpp "$cpp_ref" || return 1
+    XLNSCPP_SHA=$(git -C "$XLNSCPP_DIR" rev-parse HEAD)
     log "    xlnscpp at $XLNSCPP_SHA"
+    if [ "$LNS_CUDA" -eq 1 ]; then
+        dep_at "$XLNSCUDA_DIR" https://github.com/xlnsresearch/xlnscuda "$cuda_ref" || return 1
+        log "    xlnscuda at $(git -C "$XLNSCUDA_DIR" rev-parse HEAD)"
+    fi
+}
+
+cuda_args() {
+    if [ "$LNS_CUDA" -eq 1 ]; then
+        echo "-DGGML_LNSCUDA=ON -DXLNSCUDA_DIR=$XLNSCUDA_DIR -DCMAKE_CUDA_HOST_COMPILER=${CUDAHOSTCXX:-/usr/bin/g++}"
+    else
+        echo "-DGGML_LNSCUDA=OFF"
+    fi
 }
 
 run_validation() {
@@ -95,7 +113,8 @@ cd "$GGML_DIR/build-lns" || return 1
 # (only the ggml-lns target — a single TU — recompiles per mode).
 for mode in base monte sum32 lpvip; do
     log "    Building + testing (sum mode: $mode)"
-    cmake .. \
+    # shellcheck disable=SC2046
+    cmake .. $(cuda_args) \
         -DGGML_LNS=ON \
         -DGGML_LNS32=ON \
         -DGGML_LNS16_SUM="$mode" \
@@ -106,9 +125,14 @@ for mode in base monte sum32 lpvip; do
         -DGGML_CUDA=OFF \
         -DCMAKE_BUILD_TYPE=Release \
         -DXLNSCPP_DIR="$XLNSCPP_DIR" || return 1
-    cmake --build . --target test-lns-backend -j"$JOBS" || return 1
+    cmake --build . --target test-lns-backend $([ "$LNS_CUDA" -eq 1 ] && echo test-lns-cuda-parity) -j"$JOBS" || return 1
     GGML_LNS_BACKEND=16 ./bin/test-lns-backend LNS16 "$mode" || return 1
     log "    PASS: unit test (LNS16, $mode)"
+    if [ "$LNS_CUDA" -eq 1 ]; then
+        ./bin/test-lns-cuda-parity --expect-sum="$mode" || return 1   # exit 77 (no GPU) fails too
+        ./bin/test-lns-backend LNSCUDA16 "$mode" || return 1
+        log "    PASS: GPU parity + unit test (LNSCUDA16, $mode)"
+    fi
 done
 
 log "    Running test-lns-backend (LNS32)"
@@ -142,7 +166,8 @@ cd "$LLAMA_DIR/build-lns" || return 1
 # llama-completion fails the pipeline even though tee exits 0.
 for mode in base monte sum32 lpvip; do
     log "    Building llama-completion (sum mode: $mode)"
-    cmake .. \
+    # shellcheck disable=SC2046
+    cmake .. $(cuda_args) \
         -DGGML_LNS=ON \
         -DGGML_LNS32=ON \
         -DGGML_LNS16_SUM="$mode" \
@@ -163,6 +188,11 @@ for mode in base monte sum32 lpvip; do
         -fa 0 \
         -no-cnv 2>&1 | tee -a "$LOG_FILE" || return 1
     log "    PASS: SmolLM2 inference (LNS16, $mode)"
+    if [ "$LNS_CUDA" -eq 1 ]; then
+        GGML_LNS_BACKEND=cuda16 "$LLAMA_DIR/build-lns/bin/llama-completion" \
+            -m "$MODEL_SMOLLM" -p "The capital of France is" -n 20 -fa 0 -no-cnv 2>&1 | tee -a "$LOG_FILE" || return 1
+        log "    PASS: SmolLM2 inference (LNSCUDA16, $mode)"
+    fi
 done
 
 # LNS32 backend: short run — float<->xlns32 conversion has no lookup table,
@@ -201,10 +231,9 @@ echo "$GGML_SHA" > "$REPO_ROOT/patches/ggml-base-commit.txt.new"
 echo "$LLAMA_SHA" > "$REPO_ROOT/patches/llama-base-commit.txt.new"
 }
 
-log "==> Preparing xlnscpp"
-prepare_xlnscpp
-
-if ! run_validation; then
-    fallback_xlnscpp
+log "==> Preparing isolated xlnscpp$([ "$LNS_CUDA" -eq 1 ] && echo " + xlnscuda") clones"
+if ! prepare_deps origin/main origin/main || ! run_validation; then
+    log "    retrying with the pinned xlnscpp/xlnscuda commits"
+    prepare_deps "$XLNSCPP_BASE_COMMIT" "$XLNSCUDA_BASE_COMMIT" || exit 1
     run_validation
 fi

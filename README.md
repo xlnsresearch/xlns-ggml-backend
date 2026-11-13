@@ -18,9 +18,16 @@ runs an LLM's compute in LNS arithmetic:
 - **LNS32** — 32-bit LNS (xlns32) arithmetic on the CPU, structural parity port
   of the same op set.
 - **LNSCUDA16 / LNSCUDA32** — the same arithmetic on an NVIDIA GPU through
-  xlnscuda. LNSCUDA16 is bit-identical to LNS16 (`base`), so a GPU run
+  xlnscuda. LNSCUDA16 supports all four summations (`base`, `monte`,
+  `lpvip`, `sum32`) and is bit-identical to LNS16 built in the same mode, so a GPU run
   reproduces the CPU results token for token, much faster. See
   [docs/CUDA.md](docs/CUDA.md).
+
+| Backend | Summation modes |
+|---|---|
+| LNS16 (CPU) | `base`, `monte`, `lpvip`, `sum32` |
+| LNSCUDA16 (GPU) | `base`, `monte`, `lpvip`, `sum32` |
+| LNS32 / LNSCUDA32 | xlns32 (no modes) |
 
 How the backends share one framework, and how to add another library, is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -42,8 +49,8 @@ hf download bartowski/SmolLM2-135M-Instruct-GGUF SmolLM2-135M-Instruct-Q4_K_M.gg
 ./run.sh --sum-mode=sum32   # re-run a variant without rebuilding
 
 # With an NVIDIA GPU and the CUDA toolkit:
-./setup.sh --cuda --sum-mode=base --unit-test
-./run.sh --backend=cuda16
+./setup.sh --cuda --sum-mode=monte --unit-test
+./run.sh --backend=cuda16 --sum-mode=monte
 ```
 
 Expected output (SmolLM2, LNS16, `sum32`):
@@ -150,7 +157,8 @@ Two structural caveats:
 The same op set on an NVIDIA GPU, through the xlnscuda submodule. The GPU
 kernels repeat the CPU kernels' LNS operations in the same order with the same
 lookup tables (support for which was added to xlnscuda for this), so LNSCUDA16
-output is bit-identical to LNS16 built with `GGML_LNS16_SUM=base`, and
+output is bit-identical to LNS16 built with the same `GGML_LNS16_SUM` (`base`,
+`monte`, `lpvip` or `sum32`), and
 LNSCUDA32 matches LNS32 except for last-ulp libm differences in its
 activations. Weights are converted to LNS once and cached in VRAM. Build with
 `./setup.sh --cuda`; details, numbers and limits are in

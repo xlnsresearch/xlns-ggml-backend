@@ -30,6 +30,7 @@
 #   ./scripts/lns-vs-cpu-quality.sh -b 32                # LNS32 instead of LNS16
 #   ./scripts/lns-vs-cpu-quality.sh -b cuda16            # LNS16 arithmetic on the GPU
 #                                                        # (needs ./setup.sh --cuda)
+#   ./scripts/lns-vs-cpu-quality.sh -b cuda16 --sum-mode=monte  # one mode's build
 #   ./scripts/lns-vs-cpu-quality.sh --skip-ppl           # divergence only
 #   ./scripts/lns-vs-cpu-quality.sh -n 40 --ppl-chunks 2 # more tokens / chunks
 #
@@ -46,32 +47,33 @@
 #
 # The LNS side defaults to build/llama.cpp/build-lns/bin. Since the summation
 # mode is compile-time, grading a specific mode means pointing at that mode's
-# tree, e.g.
-#   LLAMA_BIN_DIR=build/llama.cpp/build-lns-sum32/bin ./scripts/lns-vs-cpu-quality.sh ...
+# tree: --sum-mode=MODE uses build/llama.cpp/build-lns-MODE/bin (or set
+# LLAMA_BIN_DIR), and checks that the binary reports sum=MODE.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-LLAMA_BIN_DIR="${LLAMA_BIN_DIR:-$REPO_ROOT/build/llama.cpp/build-lns/bin}"
+LLAMA_BIN_DIR_SET="${LLAMA_BIN_DIR:-}"
 REF_BIN_DIR="${REF_BIN_DIR:-$REPO_ROOT/build/llama.cpp/build-ref/bin}"
-COMPLETION="$LLAMA_BIN_DIR/llama-completion"
-PERPLEXITY="$LLAMA_BIN_DIR/llama-perplexity"
 REF_COMPLETION="$REF_BIN_DIR/llama-completion"
 REF_PERPLEXITY="$REF_BIN_DIR/llama-perplexity"
 
 BACKEND="${GGML_LNS_BACKEND:-16}"
+SUM_MODE=""
 N_TOKENS=20
 PPL_CHUNKS=1
 PPL_TOL_PCT=15
 SKIP_PPL=0
 MODELS=()
 
-usage() { sed -n '2,44p' "$0"; exit "${1:-0}"; }
+usage() { sed -n '2,51p' "$0"; exit "${1:-0}"; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help)       usage ;;
         -b|--backend)    BACKEND="$2"; shift 2 ;;
+        --sum-mode=*)    SUM_MODE="${1#*=}"; shift ;;
+        --sum-mode)      SUM_MODE="$2"; shift 2 ;;
         -m|--model)      MODELS+=("$2"); shift 2 ;;
         -n|--tokens)     N_TOKENS="$2"; shift 2 ;;
         --ppl-chunks)    PPL_CHUNKS="$2"; shift 2 ;;
@@ -82,9 +84,21 @@ while [ $# -gt 0 ]; do
 done
 
 case "$BACKEND" in
-    16|32|cuda|cuda16|cuda32) ;;
+    16|32|cuda16|cuda32) ;;
+    cuda) BACKEND=cuda16 ;;
     *) echo "ERROR: backend must be 16, 32, cuda16 or cuda32" >&2; exit 1 ;;
 esac
+case "$SUM_MODE" in
+    ""|base|monte|lpvip|sum32) ;;
+    *) echo "ERROR: --sum-mode must be base, monte, lpvip or sum32" >&2; exit 1 ;;
+esac
+if [ -n "$SUM_MODE" ]; then
+    LLAMA_BIN_DIR="${LLAMA_BIN_DIR_SET:-$REPO_ROOT/build/llama.cpp/build-lns-$SUM_MODE/bin}"
+else
+    LLAMA_BIN_DIR="${LLAMA_BIN_DIR_SET:-$REPO_ROOT/build/llama.cpp/build-lns/bin}"
+fi
+COMPLETION="$LLAMA_BIN_DIR/llama-completion"
+PERPLEXITY="$LLAMA_BIN_DIR/llama-perplexity"
 
 if [ "${#MODELS[@]}" -eq 0 ]; then
     MODELS=("$REPO_ROOT/SmolLM2-135M-Instruct-Q4_K_M.gguf")
@@ -110,6 +124,21 @@ for bin in "$REF_COMPLETION" "$REF_PERPLEXITY"; do
         exit 1
     fi
 done
+
+# The LNS binary must have the backend's device and, for the xlns16 backends,
+# the requested summation mode.
+case "$BACKEND" in 16) DEV=LNS16 ;; 32) DEV=LNS32 ;; cuda16) DEV=LNSCUDA16 ;; cuda32) DEV=LNSCUDA32 ;; esac
+DEV_LINE="$("$COMPLETION" --list-devices 2>/dev/null | grep -m1 "^ *$DEV:" || true)"
+if [ -z "$DEV_LINE" ]; then
+    echo "ERROR: $COMPLETION has no $DEV device (built without --cuda, or no usable GPU)" >&2
+    exit 1
+fi
+if [ -n "$SUM_MODE" ] && [ "$DEV" != LNS32 ] && [ "$DEV" != LNSCUDA32 ] && ! echo "$DEV_LINE" | grep -q "sum=$SUM_MODE[,)]"; then
+    echo "ERROR: $COMPLETION does not run sum=$SUM_MODE: $DEV_LINE" >&2
+    exit 1
+fi
+echo "==> LNS binary: $COMPLETION"
+echo "   $DEV_LINE"
 
 # Sanity: the reference must not register any LNS device, otherwise we are
 # comparing the backend against itself again.

@@ -17,13 +17,21 @@
 
 namespace {
 
+// ", sum=<mode>[, monte=<impl>]" for xlns16 (scripts and tests check it)
+std::string sum_mode_text(const lns_cuda::kernel_set & k) {
+    std::string s;
+    if (k.sum_mode() != nullptr) {
+        s += std::string(", sum=") + k.sum_mode();
+        if (k.monte_impl() != nullptr) {
+            s += std::string(", monte=") + k.monte_impl();
+        }
+    }
+    return s;
+}
+
 // What distinguishes the two devices.
 struct xlns16_format {
-    static constexpr const char * name    = "LNSCUDA16";
-    // LNSCUDA16 reproduces LNS16's base summation; test-lns-backend checks
-    // tolerance profiles against the "sum=" part of the description.
-    static constexpr const char * summary = "xlns16, sum=base";
-    static constexpr const char * audit   = "\"sum_mode\":\"base\",";
+    static constexpr const char * name = "LNSCUDA16";
     static const lns_cuda::kernel_set & kernels() { return lns_cuda::xlns16_kernels(); }
     static ggml_guid_t guid() {
         // ASCII "LNSCUDA16-bkend-"
@@ -34,9 +42,7 @@ struct xlns16_format {
 };
 
 struct xlns32_format {
-    static constexpr const char * name    = "LNSCUDA32";
-    static constexpr const char * summary = "xlns32";
-    static constexpr const char * audit   = "";
+    static constexpr const char * name = "LNSCUDA32";
     static const lns_cuda::kernel_set & kernels() { return lns_cuda::xlns32_kernels(); }
     static ggml_guid_t guid() {
         // ASCII "LNSCUDA32-bkend-"
@@ -54,7 +60,9 @@ struct lns_cuda_traits : lns::backend_traits_base {
 
     static const char * description() {
         static const std::string desc = []() {
-            std::string d = std::string("Logarithmic Number System on CUDA (") + Format::summary + ")";
+            const lns_cuda::kernel_set & k = Format::kernels();
+            std::string d = std::string("Logarithmic Number System on CUDA (") + k.format_name() +
+                            sum_mode_text(k) + ")";
             cudaDeviceProp prop;
             const int device = lns_cuda::selected_device();
             if (device >= 0 && cudaGetDeviceProperties(&prop, device) == cudaSuccess) {
@@ -73,7 +81,11 @@ struct lns_cuda_traits : lns::backend_traits_base {
 
     static size_t device_count() { return lns_cuda::selected_device() >= 0 ? 1 : 0; }
 
-    static const char * audit_fields() { return Format::audit; }
+    static const char * audit_fields() {
+        static const std::string fields = Format::kernels().sum_mode() == nullptr ? std::string() :
+            std::string("\"sum_mode\":\"") + Format::kernels().sum_mode() + "\",";
+        return fields.c_str();
+    }
 };
 
 using lns_cuda16_backend = lns::host_backend<lns_cuda_traits<xlns16_format>>;

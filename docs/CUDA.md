@@ -5,7 +5,8 @@ through the [xlnscuda](https://github.com/xlnsresearch/xlnscuda) submodule.
 They exist to make LNS inference fast enough to use; they are not a different
 numerical experiment:
 
-- **LNSCUDA16 is bit-identical to LNS16** built with `GGML_LNS16_SUM=base`.
+- **LNSCUDA16 is bit-identical to LNS16** built with the same
+  `GGML_LNS16_SUM`: `base`, `monte`, `lpvip` or `sum32`, the same four modes.
   Every logit, and so every generated token, matches the CPU backend.
 - **LNSCUDA32 matches LNS32** bit for bit in everything integer-only (mat-mul,
   add/mul/div, rms_norm, rope); its float-based activations can differ in the
@@ -22,20 +23,51 @@ For how this fits next to the CPU backends, see [ARCHITECTURE.md](ARCHITECTURE.m
 - A host compiler your `nvcc` accepts. CUDA 12.0 rejects GCC 13; `setup.sh`
   probes the installed `g++` versions and uses the first one that works
   (`g++-12` on Ubuntu 24.04). Override with `CUDAHOSTCXX=/path/to/g++`.
-- The xlnscuda submodule with device-table support (`xlns16d_table_init` in
-  `xlnscuda/xlns16d.cu`); `setup.sh` and the CMake file check for it.
+- The xlnscuda and xlnscpp submodules at their pinned commits (xlnscuda
+  `aa5ccf0` or later for `xlns16d_monte.cu`, `xlns32d_lpvip.cu` and
+  `tests/chkxlns16d_sum_modes.cu`; xlnscpp `41843b0` or later for the
+  `xlns16.cpp` / `xlns32lpvip.cpp` fixes).
 
 ## Build, test, run
 
 ```bash
 git submodule update --init                       # xlnscpp + xlnscuda
-./setup.sh --cuda --sum-mode=base --unit-test     # build, run all tests, run inference
-./run.sh --backend=cuda16                         # LNS16 arithmetic on the GPU
-./run.sh --backend=cuda32                         # LNS32 arithmetic on the GPU
+
+# all four modes at once (base, monte, lpvip, sum32), tests only
+./setup.sh --cuda --unit-test --skip-inference
+
+# one GPU mode at a time: build + tests (no model needed)
+./setup.sh --cuda --sum-mode=base  --unit-test --skip-inference
+./setup.sh --cuda --sum-mode=monte --unit-test --skip-inference
+./setup.sh --cuda --sum-mode=lpvip --unit-test --skip-inference
+./setup.sh --cuda --sum-mode=sum32 --unit-test --skip-inference
+
+# one GPU mode at a time: build + tests + SmolLM2 inference (CPU and GPU)
+./setup.sh --cuda --sum-mode=base  --unit-test
+./setup.sh --cuda --sum-mode=monte --unit-test
+./setup.sh --cuda --sum-mode=lpvip --unit-test
+./setup.sh --cuda --sum-mode=sum32 --unit-test
+# Monte through LPVIP (GGML_LNS16_MONTE_BYLPVIP=ON) is not a setup.sh option;
+# build it by hand after setup has prepared build/ggml:
+cmake -S build/ggml -B build/ggml/build-lns-monte-bylpvip -DGGML_LNS=ON -DGGML_LNS32=ON -DGGML_LNSCUDA=ON \
+  -DGGML_LNS16_SUM=monte -DGGML_LNS16_MONTE_BYLPVIP=ON -DGGML_BLAS=OFF -DGGML_CPU_REPACK=OFF \
+  -DXLNSCPP_DIR=$PWD/xlnscpp -DXLNSCUDA_DIR=$PWD/xlnscuda -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-12 -DCMAKE_BUILD_TYPE=Release
+cmake --build build/ggml/build-lns-monte-bylpvip --target test-lns-cuda-parity test-lns-backend -j6
+(cd build/ggml/build-lns-monte-bylpvip && ./bin/test-lns-cuda-parity && ./bin/test-lns-backend LNSCUDA16 monte)
+
+# run after setup (no rebuild)
+./run.sh --backend=cuda16 --sum-mode=base  -- --temp 0 --seed 1
+./run.sh --backend=cuda16 --sum-mode=monte -- --temp 0 --seed 1
+./run.sh --backend=cuda16 --sum-mode=lpvip -- --temp 0 --seed 1
+./run.sh --backend=cuda16 --sum-mode=sum32 -- --temp 0 --seed 1
+./run.sh --backend=cuda16 --sum-mode=all   -- --temp 0 --seed 1   # all four modes in turn
+./run.sh --backend=16     --sum-mode=monte -- --temp 0 --seed 1   # same tree on the CPU: same text
+./run.sh --backend=cuda32                                         # LNS32 arithmetic on the GPU
 ```
 
 `--cuda` (or `LNS_CUDA=1`) adds `-DGGML_LNSCUDA=ON` to every LNS build. With
-`--unit-test` it also runs, in the `base` build:
+`--unit-test` it also runs `xlnscuda/tests/chkxlns16d_sum_modes.cu` (device
+Monte/LPVIP vs xlnscpp) and, in each mode's build (LNSCUDA32 once):
 
 - `test-lns-cuda-parity`: LNSCUDA16 against LNS16 and LNSCUDA32 against LNS32,
   op by op (with quantized, F16 and F32 weights, broadcasting, permuted KV-cache
@@ -134,8 +166,30 @@ Through a whole model these last-ulp differences accumulate: on SmolLM2 and
 Qwen2.5-0.5B the final logits differ from LNS32's by at most 0.0016 (absolute,
 on logits of order 10), with the same top-5 tokens.
 
-The GPU backends implement the `base` summation only. A `sum32` / `lpvip` /
-`monte` build still uses its own mode for the ops that fall back to the CPU.
+### Summation modes
+
+`GGML_LNS16_SUM` selects the reduction (mat-mul dot products, softmax sum,
+RMS-norm sum of squares) of LNS16 and LNSCUDA16 alike; other additions are
+unchanged. A mode is a separate build (`build-lns-<mode>`); `run.sh` picks it
+and checks the device description (`sum=monte, monte=pure16`) before running.
+
+- `lpvip`: xlns16 products widened into a 32-bit LPVIP accumulator, truncated
+  once at the end, as in `xlns32lpvip.cpp`. Its singularity branch uses double
+  `log`/`pow`; the library test compares all 2^23 inputs of it (0 mismatches
+  with CUDA 12.0 vs glibc). On consumer GPUs that FP64 path makes lpvip about
+  5x slower than base (SmolLM2: 3.0 vs 14.5 tok/s on an RTX 2050).
+- `monte`: `xlns16monte.cpp` (or `xlns16monte_bylpvip.cpp` with
+  `GGML_LNS16_MONTE_BYLPVIP=ON`). The LFSR (seed 7, one draw per Monte add)
+  is owned by LNS16 (`ggml-lns.h`); each GPU op reserves the draws the CPU
+  would consume at that point of the graph and every output jumps ahead to
+  its own start, so GPU, CPU-fallback ops (`MUL_MAT_ID`) and an all-CPU run
+  use the same sequence. The state keeps advancing across ops and tokens;
+  each process starts at 7. SmolLM2: 11.9 tok/s.
+- `sum32`: xlns16 terms widened exactly into an xlns32 accumulator, added
+  with xlnscuda's table-based `xlns32d_add` (the same xlns32 configuration as
+  LNS32: table `sb`, cotransformation `db`), narrowed once with
+  round-to-nearest, as in `lns-backend/src/lns16-sum32.h`. The most accurate
+  mode, and it needs no extra xlnscuda code: CUDA32 already uses that adder.
 
 ## Memory model
 
@@ -209,8 +263,8 @@ never include ggml. Adding an LNS format is one more `.cu` file and a
   remaining ops (`GET_ROWS`, `SET_ROWS`, copies) on the GPU too.
 - **Sequential reductions** keep parity but limit single-token mat-mul to one
   thread per output row; prompt processing parallelises across tokens.
-- `base` summation only; no `sum32` on the GPU yet (it would need xlns32 adds
-  inside the xlns16 kernels).
+- Monte and LPVIP keep their algorithmic limits on the GPU (LPVIP is poor on
+  mixed-sign cancellation).
 - RoPE: no YaRN or linear scaling (declined, so those nodes run on the CPU
   backend in F32).
 - One GPU per process (`GGML_LNS_CUDA_DEVICE`); `GGML_BACKEND_DL=ON` builds are

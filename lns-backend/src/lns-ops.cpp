@@ -1,4 +1,5 @@
 #include "lns-ops.h"
+#include "ggml-lns.h"
 #include "ggml-impl.h"
 
 #include <algorithm>
@@ -88,7 +89,7 @@ using ::sqrt; using ::pow; using ::fabs; using ::abs;
 // NOTE: xlns16_randombits (LFSR PRNG state) is a mutable global, hit on every
 // monte add. Safe while graph_compute is single-threaded; must become
 // thread_local (with distinct nonzero per-thread seeds — 0 is an absorbing
-// state) if the backend is ever parallelized.
+// state) if the backend is ever parallelized. LNSCUDA16 draws from it too.
   #ifdef GGML_LNS16_MONTE_BYLPVIP
     #include "xlns16monte_bylpvip.cpp"   // MUST come after xlns32lpvip.cpp
   #else
@@ -134,6 +135,63 @@ using ::sqrt; using ::pow; using ::fabs; using ::abs;
 
 const char * lns16_sum_mode_name(void) {
     return LNS16_SUM_MODE_NAME;
+}
+
+const char * lns16_monte_impl_name(void) {
+#if defined(GGML_LNS16_SUM_MONTE) && defined(GGML_LNS16_MONTE_BYLPVIP)
+    return "bylpvip";
+#elif defined(GGML_LNS16_SUM_MONTE)
+    return "pure16";
+#else
+    return nullptr;
+#endif
+}
+
+// ============================================================
+// Monte state (ggml-lns.h): xlns16_randombits is the one Monte sequence of
+// the process; LNSCUDA16 reserves blocks of it in graph order.
+// ============================================================
+
+bool ggml_backend_lns16_monte_get_state(uint16_t * state) {
+#if defined(GGML_LNS16_SUM_MONTE)
+    *state = xlns16_randombits;
+    return true;
+#else
+    (void) state;
+    return false;
+#endif
+}
+
+bool ggml_backend_lns16_monte_set_state(uint16_t state) {
+#if defined(GGML_LNS16_SUM_MONTE)
+    if (state == 0) {
+        return false; // absorbing LFSR state
+    }
+    xlns16_randombits = state;
+    return true;
+#else
+    (void) state;
+    return false;
+#endif
+}
+
+bool ggml_backend_lns16_monte_reserve(uint64_t draws, uint16_t * start) {
+#if defined(GGML_LNS16_SUM_MONTE)
+    *start = xlns16_randombits;
+    // the LFSR step of xlns16monte*.cpp; its period is 65535
+    for (uint64_t i = draws % 65535; i > 0; i--) {
+        const xlns16 bit = xlns16_randombits & 1;
+        xlns16_randombits >>= 1;
+        if (bit) {
+            xlns16_randombits ^= 0xB400u;
+        }
+    }
+    return true;
+#else
+    (void) draws;
+    (void) start;
+    return false;
+#endif
 }
 
 // ============================================================

@@ -13,7 +13,10 @@
 #                                 # (discards any manual in-tree edits)
 #   ./setup.sh --cuda             # also build the LNSCUDA16/LNSCUDA32 GPU backends
 #                                 # (xlnscuda; needs nvcc), test them against the
-#                                 # CPU backends and run GPU inference (LNS_CUDA=1)
+#                                 # CPU backends and run GPU inference (LNS_CUDA=1).
+#                                 # LNSCUDA16 has the same 4 sum modes as LNS16.
+#                                 # LNS_REQUIRE_GPU=1 fails instead of skipping
+#                                 # GPU tests when no GPU is usable.
 #
 # Upstream trees: by default the three source trees (build/ggml, build/llama.cpp,
 # xlnscpp) are used at the pinned commits recorded in patches/*-base-commit.txt —
@@ -70,6 +73,7 @@ SUM_MODE_ARG=""
 LNS16_SUM="${LNS16_SUM:-}"
 LNS32_INFERENCE="${LNS32_INFERENCE:-1}"
 LNS_CUDA="${LNS_CUDA:-0}"
+LNS_REQUIRE_GPU="${LNS_REQUIRE_GPU:-0}"
 
 for arg in "$@"; do
     case "$arg" in
@@ -285,7 +289,7 @@ prepare_xlnscpp() {
         echo "    Initialising xlnscpp submodule..."
         git -C "$REPO_ROOT" submodule update --init
     fi
-    ensure_repo_at "$XLNSCPP_DIR" main "$XLNSCPP_BASE_COMMIT"
+    ensure_repo_at "$XLNSCPP_DIR" main "$XLNSCPP_BASE_COMMIT" || exit 1
 }
 
 fallback_xlnscpp() {
@@ -445,6 +449,57 @@ run_inference() {
         -no-cnv || return 1
 }
 
+# Runs a GPU test; exit 77 means no usable GPU (a skip, or a failure with
+# LNS_REQUIRE_GPU=1). Returns 0 ran, 77 skipped, 1 failed.
+gpu_test() {
+    local status=0
+    "$@" || status=$?
+    if [ "$status" -eq 77 ]; then
+        echo "SKIPPED: no usable CUDA device for: $*" >&2
+        [ "$LNS_REQUIRE_GPU" = 1 ] && return 1
+        return 77
+    fi
+    [ "$status" -eq 0 ] || return 1
+}
+
+# xlnscuda Monte/LPVIP vs xlnscpp, then per supported mode LNSCUDA16 parity
+# and unit tests; LNSCUDA32 once (it has no summation modes).
+run_cuda_unit_tests() {
+    local mode status bin="$GGML_DIR/chkxlns16d_sum_modes"
+    echo ""
+    echo "==> Running xlnscuda Monte/LPVIP tests (chkxlns16d_sum_modes, both Monte variants)"
+    for variant in "" -Dxlns16d_monte_bylpvip; do
+        nvcc -std=c++14 -O2 -ccbin "$CUDAHOSTCXX" -w -I "$XLNSCPP_DIR" $variant \
+            "$XLNSCUDA_DIR/tests/chkxlns16d_sum_modes.cu" -o "$bin" || return 1
+        status=0
+        gpu_test "$bin" || status=$?
+        [ "$status" -eq 1 ] && return 1
+    done
+    local cuda32_done=0
+    for mode in "${MODES[@]}"; do
+        echo ""
+        echo "==> Running test-lns-cuda-parity + test-lns-backend (LNSCUDA16, sum mode: $mode)"
+        status=0
+        gpu_test bash -c 'cd "$1" && ./bin/test-lns-cuda-parity --only=cuda16 --expect-sum="$2"' _ \
+            "$GGML_DIR/build-lns-$mode" "$mode" || status=$?
+        [ "$status" -eq 1 ] && return 1
+        if [ "$status" -eq 0 ]; then
+            ( cd "$GGML_DIR/build-lns-$mode" && ./bin/test-lns-backend LNSCUDA16 "$mode" ) || return 1
+        fi
+        if [ "$cuda32_done" -eq 0 ]; then
+            cuda32_done=1
+            echo ""
+            echo "==> Running test-lns-cuda-parity + test-lns-backend (LNSCUDA32)"
+            status=0
+            gpu_test bash -c 'cd "$1" && ./bin/test-lns-cuda-parity --only=cuda32' _ "$GGML_DIR/build-lns-$mode" || status=$?
+            [ "$status" -eq 1 ] && return 1
+            if [ "$status" -eq 0 ]; then
+                ( cd "$GGML_DIR/build-lns-$mode" && ./bin/test-lns-backend LNSCUDA32 ) || return 1
+            fi
+        fi
+    done
+}
+
 run_build_and_test() {
     local mode
 
@@ -482,26 +537,7 @@ run_build_and_test() {
             GGML_LNS_BACKEND=32 ./bin/test-lns-backend LNS32 ) || return 1
 
         if [ "$LNS_CUDA" -eq 1 ]; then
-            # LNSCUDA16 reproduces the base summation, so it is graded (and
-            # compared bit for bit) in the base build only.
-            if [[ " ${MODES[*]} " == *" base "* ]]; then
-                echo ""
-                echo "==> Running test-lns-cuda-parity (LNSCUDA16 vs LNS16, LNSCUDA32 vs LNS32)"
-                local parity_status=0
-                ( cd "$GGML_DIR/build-lns-base" && ./bin/test-lns-cuda-parity ) || parity_status=$?
-                if [ "$parity_status" -eq 77 ]; then
-                    echo "NOTE: no CUDA device visible; GPU tests skipped (the build itself succeeded)" >&2
-                elif [ "$parity_status" -ne 0 ]; then
-                    return 1
-                else
-                    echo ""
-                    echo "==> Running test-lns-backend (LNSCUDA16, LNSCUDA32)"
-                    ( cd "$GGML_DIR/build-lns-base" && \
-                        ./bin/test-lns-backend LNSCUDA16 base && ./bin/test-lns-backend LNSCUDA32 ) || return 1
-                fi
-            else
-                echo "NOTE: CUDA tests run in the base build; include base in --sum-mode to run them" >&2
-            fi
+            run_cuda_unit_tests || return 1
         fi
     fi
 
@@ -543,18 +579,25 @@ run_build_and_test() {
         fi
 
         if [ "$LNS_CUDA" -eq 1 ]; then
-            # The GPU backends do not depend on the sum mode; LNSCUDA16 matches
-            # the base build's CPU results token for token.
-            local cuda_bin="$LLAMA_DIR/build-lns-${MODES[0]}/bin/llama-completion"
-            local cuda_backend
-            for cuda_backend in cuda16 cuda32; do
-                if [ -n "$MODEL_SMOLLM" ]; then
-                    run_inference "SmolLM2-135M-Instruct" "$MODEL_SMOLLM" "$cuda_bin" "$cuda_backend" 20 "${MODES[0]}" || return 1
+            # LNSCUDA16 from each mode's own build; LNSCUDA32 once
+            for mode in "${MODES[@]}"; do
+                local cuda_bin="$LLAMA_DIR/build-lns-$mode/bin/llama-completion"
+                if ! "$cuda_bin" --list-devices 2>/dev/null | grep -q "LNSCUDA16:.*sum=$mode[,)]"; then
+                    echo "SKIPPED: cuda16 inference ($mode): no usable LNSCUDA16 device" >&2
+                    [ "$LNS_REQUIRE_GPU" = 1 ] && return 1
+                    continue
                 fi
-                if [ -n "$MODEL_LLAMA32" ] && [ "$cuda_backend" = cuda16 ]; then
-                    run_inference "Llama-3.2-1B-Instruct" "$MODEL_LLAMA32" "$cuda_bin" "$cuda_backend" 20 "${MODES[0]}" || return 1
+                if [ -n "$MODEL_SMOLLM" ]; then
+                    run_inference "SmolLM2-135M-Instruct" "$MODEL_SMOLLM" "$cuda_bin" cuda16 20 "$mode" || return 1
+                fi
+                if [ -n "$MODEL_LLAMA32" ]; then
+                    run_inference "Llama-3.2-1B-Instruct" "$MODEL_LLAMA32" "$cuda_bin" cuda16 20 "$mode" || return 1
                 fi
             done
+            if [ -n "$MODEL_SMOLLM" ] && "$LLAMA_DIR/build-lns-${MODES[0]}/bin/llama-completion" --list-devices 2>/dev/null | grep -q LNSCUDA32; then
+                run_inference "SmolLM2-135M-Instruct" "$MODEL_SMOLLM" \
+                    "$LLAMA_DIR/build-lns-${MODES[0]}/bin/llama-completion" cuda32 20 "${MODES[0]}" || return 1
+            fi
         fi
     fi
 }

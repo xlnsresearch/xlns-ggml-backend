@@ -65,11 +65,13 @@ void compute_mul_mat(context & ctx, ggml_tensor * dst) {
     LNS_CUDA_CHECK(k.to_lns(x_f32, x, ggml_nelements(src1), ctx.stream()));
 
     float * out = ctx.device_f32(role::dst, ggml_nelements(dst));
-    const mul_mat_args args = {
+    mul_mat_args args = {
         w, x, out,
         src0->ne[0], src0->ne[1], src1->ne[1],
         src0->ne[2], src0->ne[3], src1->ne[2], src1->ne[3],
+        0,
     };
+    args.monte_seed = ctx.reserve_monte(k.mul_mat_draws(args));
     LNS_CUDA_CHECK(k.mul_mat(args, ctx.stream()));
     ctx.download(out, dst);
 }
@@ -159,10 +161,11 @@ op_support check_rms_norm(const ggml_tensor * op) {
 
 void compute_rms_norm(context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0 = dst->src[0];
+    const kernel_set & k = ctx.kernels();
     const float * src = ctx.upload(src0, role::src0);
     float *       out = ctx.device_f32(role::dst, ggml_nelements(dst));
-    LNS_CUDA_CHECK(ctx.kernels().rms_norm(src, out, src0->ne[0], ggml_nrows(src0), op_param_f32(dst, 0),
-                                          ctx.stream()));
+    const uint16_t seed = ctx.reserve_monte(k.rms_norm_draws(src0->ne[0], ggml_nrows(src0)));
+    LNS_CUDA_CHECK(k.rms_norm(src, out, src0->ne[0], ggml_nrows(src0), op_param_f32(dst, 0), seed, ctx.stream()));
     ctx.download(out, dst);
 }
 
@@ -193,6 +196,7 @@ void compute_soft_max(context & ctx, ggml_tensor * dst) {
     args.scale = op_param_f32(dst, 0);
     args.dst   = ctx.device_f32(role::dst, ggml_nelements(dst));
     args.work  = ctx.device_lns(role::work, ggml_nelements(src0));
+    args.monte_seed = ctx.reserve_monte(ctx.kernels().soft_max_draws(src0->ne[0], ggml_nrows(src0)));
     LNS_CUDA_CHECK(ctx.kernels().soft_max(args, ctx.stream()));
     ctx.download(args.dst, dst);
 }

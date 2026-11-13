@@ -21,7 +21,9 @@
 //             this is cross-checked against the device description, so a
 //             mismatched profile is an error, not a silently wrong grade;
 //             ignored for the 32-bit devices, which always use their own
-//             tight profile; LNSCUDA16 implements base only)
+//             tight profile). LNSCUDA16 implements all four modes; its
+//             CPU fallback LNS16 must report the same mode.
+//             Monte starts from seed 7 (ggml-lns.h) for reproducible numbers.
 
 // Per-mode tolerances for the summation-dependent tests. The elementwise
 // tests (div/swiglu/geglu/tanh/clamp/argsort) keep their fixed tolerances —
@@ -42,7 +44,8 @@ struct tol_profile {
 // monte: stochastic dither — unbiased in EXPECTATION but any single reduction
 //        can err more than base (5.7% observed on rms_norm 576 with the
 //        default LFSR seed; the draw depends on the LFSR phase, i.e. on how
-//        many monte adds ran earlier in the process).
+//        many monte adds ran earlier in the process, which main() fixes by
+//        starting from seed 7).
 // lpvip: 32-bit LPVIP accumulator — slightly looser than base on short sums
 //        (Mitchell-approximated adds, 1.6% observed on the K=2 matmul),
 //        dramatically better on long sums (0.77% observed on rms_norm 576,
@@ -65,10 +68,15 @@ struct tol_profile {
 // a threshold anyone should be comfortable with; it is gated wide so the sweep
 // stays green while the defect is documented, and it is exactly why this case
 // exists (all four modes score an identical 0.59% on the K=2 mul_mat above).
+// monte_bylpvip: GGML_LNS16_MONTE_BYLPVIP=ON (chosen automatically for profile
+// "monte" when the device reports monte=bylpvip). Every Monte add is an
+// xlns32_add_lpvip, so it inherits lpvip's cancellation defect: mul_mat_long
+// 56.63% measured (rms_norm 576 3.50%), hence lpvip's mul_mat_long gate.
 static const tol_profile PROFILES[] = {
     { "base",  0.006f, 0.02f,  0.02f, 0.06f,  0.07f  },
     { "monte", 0.03f,  0.05f,  0.05f, 0.08f,  0.08f  },
     { "lpvip", 0.02f,  0.03f,  0.02f, 0.02f,  0.75f  },
+    { "monte_bylpvip", 0.03f, 0.05f, 0.05f, 0.08f, 0.75f },
     { "sum32", 0.006f, 0.02f,  0.02f, 0.01f,  0.005f },
     { "lns32", 0.001f, 0.001f, 0.001f, 0.001f, 0.001f },
 };
@@ -1224,6 +1232,9 @@ int main(int argc, char ** argv) {
             break;
         }
     }
+    if (profile_found && strcmp(profile_name, "monte_bylpvip") == 0) {
+        profile_found = false; // chosen from the device description, not by name
+    }
     if (!profile_found) {
         fprintf(stderr, "ERROR: unknown tolerance profile '%s' (expected base|monte|lpvip|sum32)\n", profile_name);
         return 1;
@@ -1246,20 +1257,47 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    // The LNS16 device description carries the compiled GGML_LNS16_SUM mode.
+    // The xlns16 device descriptions carry the compiled GGML_LNS16_SUM mode.
     // Refuse to run with a profile that does not match the binary: the
     // tolerances differ per mode, so a mismatch grades the wrong thing and
-    // either hides a regression or invents one.
+    // either hides a regression or invents one. A CUDA device's CPU fallback
+    // must match as well (its declined ops are graded with the same profile).
     const char * dev_desc = ggml_backend_dev_description(ggml_backend_get_device(lns_backend));
     if (!is_lns32) {
         char expect[64];
         snprintf(expect, sizeof(expect), "sum=%s", g_tol.name);
-        if (dev_desc == NULL || strstr(dev_desc, expect) == NULL) {
-            fprintf(stderr,
-                    "ERROR: tolerance profile '%s' does not match the backend build (%s).\n"
-                    "       Rebuild with -DGGML_LNS16_SUM=%s, or pass the profile this binary was built with.\n",
-                    g_tol.name, dev_desc ? dev_desc : "<no description>", g_tol.name);
-            return 1;
+        std::vector<const char *> descs = { dev_desc };
+        if (is_cuda) {
+            ggml_backend_dev_t fallback = ggml_backend_dev_by_name(cpu_lns_name);
+            descs.push_back(fallback ? ggml_backend_dev_description(fallback) : NULL);
+        }
+        for (const char * d : descs) {
+            // "sum=base" must not match "sum=base_x": the mode ends at , ; or )
+            const char * at = d ? strstr(d, expect) : NULL;
+            const char end = at ? at[strlen(expect)] : '\0';
+            if (at == NULL || (end != ',' && end != ';' && end != ')')) {
+                fprintf(stderr,
+                        "ERROR: tolerance profile '%s' does not match the backend build (%s).\n"
+                        "       Rebuild with -DGGML_LNS16_SUM=%s, or pass the profile this binary was built with.\n",
+                        g_tol.name, d ? d : "<no description>", g_tol.name);
+                return 1;
+            }
+        }
+    }
+
+    if (strcmp(g_tol.name, "monte") == 0 && dev_desc != NULL && strstr(dev_desc, "monte=bylpvip") != NULL) {
+        for (const tol_profile & p : PROFILES) {
+            if (strcmp(p.name, "monte_bylpvip") == 0) {
+                g_tol = p;
+            }
+        }
+    }
+
+    // Monte starts from seed 7 (no-op in the other modes)
+    if (ggml_backend_reg_t reg16 = ggml_backend_reg_by_name("LNS16")) {
+        auto set_state = (bool (*)(uint16_t)) ggml_backend_reg_get_proc_address(reg16, "ggml_backend_lns16_monte_set_state");
+        if (set_state != NULL && set_state(7)) {
+            printf("Monte state: seed 7 (xlns16monte.cpp's initial state), advancing across the tests\n");
         }
     }
 

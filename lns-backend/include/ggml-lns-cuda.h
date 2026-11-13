@@ -10,7 +10,7 @@ extern "C" {
 // LNS arithmetic on a CUDA GPU, through xlnscuda. One implementation, two
 // devices:
 //   LNSCUDA16 — xlns16; results are bit-identical to the LNS16 CPU backend
-//               built with GGML_LNS16_SUM=base
+//               built with the same GGML_LNS16_SUM (base, monte, lpvip or sum32)
 //   LNSCUDA32 — xlns32; results match the LNS32 CPU backend
 // Like the CPU LNS backends these are ACCEL devices on host buffers; select one
 // with GGML_LNS_BACKEND=cuda16 or cuda32. The GPU is chosen with

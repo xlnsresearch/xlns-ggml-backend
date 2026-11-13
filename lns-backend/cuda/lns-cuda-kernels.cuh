@@ -11,11 +11,21 @@
 //   __device__ static bool  gt(value, value), is_zero(value)
 //   __device__ static value exp, sqrt, recip, silu, gelu, relu, tanh (value)
 //   __device__ static value mask_from_f32(float)
+//   static constexpr const char * sum_mode, * monte_impl   (may be nullptr)
+//   struct reduction {          how mul_mat / softmax / rms_norm accumulate
+//       using acc, state;       accumulator (wider for lpvip), Monte LFSR
+//       static constexpr bool stochastic;
+//       __device__ static state start(unsigned seed, uint64_t index, uint64_t draws);
+//       __device__ static acc   from(value);
+//       __device__ static acc   add(acc, value, state &);
+//       __device__ static value finish(acc);
+//   };
 //
 // Every kernel mirrors one CPU kernel in lns-backend/src/lns-ops.cpp (and its
 // xlns32 twin), operation for operation, so results are bit-identical; the
 // comment on each kernel names the code it mirrors. Parallelism only ever
-// spans independent outputs: anything that accumulates is sequential.
+// spans independent outputs: anything that accumulates is sequential. Other
+// additions (ADD, mask bias, RoPE, epsilon) always use A::add.
 
 #include "lns-cuda-kernels.h"
 
@@ -64,12 +74,14 @@ __global__ void k_to_lns_transposed(const float * src, typename A::value * dst, 
     }
 }
 
-// ---- MUL_MAT (lns_mul_mat: one vec_dot per output, xlns16_vec_dot order) ---
+// ---- MUL_MAT (lns_mul_mat: one vec_dot per output, LNS16_VEC_DOT order) ---
 
 template <class A>
 __global__ void k_mul_mat(const typename A::value * w, const typename A::value * x, float * dst,
-                          int64_t K, int64_t M, int64_t N, int64_t ne02, int64_t ne12, int64_t r2, int64_t r3) {
+                          int64_t K, int64_t M, int64_t N, int64_t ne02, int64_t ne12, int64_t r2, int64_t r3,
+                          unsigned monte_seed) {
     using value = typename A::value;
+    using R     = typename A::reduction;
     constexpr int NB = k_mul_mat_cols;
 
     const int64_t m = (int64_t) blockIdx.x * blockDim.x + threadIdx.x;
@@ -85,17 +97,23 @@ __global__ void k_mul_mat(const typename A::value * w, const typename A::value *
     const value * xs = x + (int64_t) blockIdx.z * N * K + n0 * K;
     float *       ds = dst + (int64_t) blockIdx.z * N * M + n0 * M + m;
 
-    value acc[NB];
     if (K == 0) {
         for (int j = 0; j < nb; j++) {
             ds[j * M] = A::to_f32(A::zero);
         }
         return;
     }
+    // index of this output in the CPU's loop order (i13, i12, m, n)
+    const uint64_t out0 = ((uint64_t) blockIdx.z * (uint64_t) M + (uint64_t) m) * (uint64_t) N + (uint64_t) n0;
+    typename R::acc   acc[NB];
+    typename R::state st[NB];
     const value w0 = ws[0];
 #pragma unroll
     for (int j = 0; j < NB; j++) {
-        if (j < nb) acc[j] = A::mul(w0, xs[j * K]);
+        if (j < nb) {
+            acc[j] = R::from(A::mul(w0, xs[j * K]));
+            st[j]  = R::start(monte_seed, out0 + j, (uint64_t) K - 1);
+        }
     }
     // Operands for the next k_mul_mat_ahead steps are loaded before any of
     // them is accumulated, so the global-memory latency overlaps instead of
@@ -121,7 +139,7 @@ __global__ void k_mul_mat(const typename A::value * w, const typename A::value *
         for (int u = 0; u < U; u++) {
 #pragma unroll
             for (int j = 0; j < NB; j++) {
-                if (j < nb) acc[j] = A::add(acc[j], A::mul(wv[u], xv[j][u]));
+                if (j < nb) acc[j] = R::add(acc[j], A::mul(wv[u], xv[j][u]), st[j]);
             }
         }
     }
@@ -129,12 +147,12 @@ __global__ void k_mul_mat(const typename A::value * w, const typename A::value *
         const value wk = ws[k * M];
 #pragma unroll
         for (int j = 0; j < NB; j++) {
-            if (j < nb) acc[j] = A::add(acc[j], A::mul(wk, xs[j * K + k]));
+            if (j < nb) acc[j] = R::add(acc[j], A::mul(wk, xs[j * K + k]), st[j]);
         }
     }
 #pragma unroll
     for (int j = 0; j < NB; j++) {
-        if (j < nb) ds[j * M] = A::to_f32(acc[j]);
+        if (j < nb) ds[j * M] = A::to_f32(R::finish(acc[j]));
     }
 }
 
@@ -204,8 +222,9 @@ __global__ void k_glu(const float * gate, const float * up, int64_t gate_stride,
 // ---- RMS_NORM (xlns16_rms_norm), one block per row -------------------------
 
 template <class A>
-__global__ void k_rms_norm(const float * src, float * dst, int64_t ncols, float eps) {
+__global__ void k_rms_norm(const float * src, float * dst, int64_t ncols, float eps, unsigned monte_seed) {
     using value = typename A::value;
+    using R     = typename A::reduction;
     __shared__ value s_inv_rms;
 
     const float * x = src + (int64_t) blockIdx.x * ncols;
@@ -214,12 +233,13 @@ __global__ void k_rms_norm(const float * src, float * dst, int64_t ncols, float 
         return;
     }
     if (threadIdx.x == 0) {
-        value sum_sq = A::zero;
+        typename R::state st = R::start(monte_seed, blockIdx.x, (uint64_t) ncols);
+        typename R::acc sum_sq = R::from(A::zero);
         for (int64_t i = 0; i < ncols; i++) {
             const value v = A::from_f32(x[i]);
-            sum_sq = A::add(sum_sq, A::mul(v, v));
+            sum_sq = R::add(sum_sq, A::mul(v, v), st);
         }
-        const value mean = A::mul(sum_sq, A::from_f32(1.0f / (float) ncols));
+        const value mean = A::mul(R::finish(sum_sq), A::from_f32(1.0f / (float) ncols));
         s_inv_rms = A::recip(A::sqrt(A::add(mean, A::from_f32(eps))));
     }
     __syncthreads();
@@ -233,8 +253,9 @@ __global__ void k_rms_norm(const float * src, float * dst, int64_t ncols, float 
 
 template <class A>
 __global__ void k_soft_max(const float * src, shape4 s, const float * mask, shape4 ms, float scale,
-                           float * dst, typename A::value * work) {
+                           float * dst, typename A::value * work, unsigned monte_seed) {
     using value = typename A::value;
+    using R     = typename A::reduction;
     __shared__ value s_max[k_block_size];
     __shared__ value s_total;
 
@@ -289,11 +310,12 @@ __global__ void k_soft_max(const float * src, shape4 s, const float * mask, shap
 
     // xlns16_sum: starts from the first element, adds the rest in order
     if (threadIdx.x == 0) {
-        value total = c[0];
+        typename R::state st = R::start(monte_seed, (uint64_t) row, (uint64_t) n - 1);
+        typename R::acc total = R::from(c[0]);
         for (int64_t i = 1; i < n; i++) {
-            total = A::add(total, c[i]);
+            total = R::add(total, c[i], st);
         }
-        s_total = total;
+        s_total = R::finish(total);
     }
     __syncthreads();
     const value total = s_total;
@@ -343,6 +365,21 @@ public:
 
     const char * format_name() const override { return A::name; }
     size_t       value_size()  const override { return sizeof(value); }
+    const char * sum_mode()    const override { return A::sum_mode; }
+    const char * monte_impl()  const override { return A::monte_impl; }
+
+    uint64_t mul_mat_draws(const mul_mat_args & a) const override {
+        if (!A::reduction::stochastic || a.K == 0) {
+            return 0;
+        }
+        return (uint64_t) a.ne12 * (uint64_t) a.ne13 * (uint64_t) a.M * (uint64_t) a.N * (uint64_t) (a.K - 1);
+    }
+    uint64_t soft_max_draws(int64_t ncols, int64_t nrows) const override {
+        return A::reduction::stochastic && ncols > 0 ? (uint64_t) nrows * (uint64_t) (ncols - 1) : 0;
+    }
+    uint64_t rms_norm_draws(int64_t ncols, int64_t nrows) const override {
+        return A::reduction::stochastic ? (uint64_t) nrows * (uint64_t) ncols : 0;
+    }
 
     cudaError_t upload_tables() const override { return A::upload_tables(); }
 
@@ -367,7 +404,7 @@ public:
                         (unsigned) (a.ne12 * a.ne13));
         k_mul_mat<A><<<grid, k_mul_mat_block, 0, stream>>>(
             static_cast<const value *>(a.w), static_cast<const value *>(a.x), a.dst,
-            a.K, a.M, a.N, a.ne02, a.ne12, a.ne12 / a.ne02, a.ne13 / a.ne03);
+            a.K, a.M, a.N, a.ne02, a.ne12, a.ne12 / a.ne02, a.ne13 / a.ne03, a.monte_seed);
         return cudaGetLastError();
     }
 
@@ -414,11 +451,11 @@ public:
     }
 
     cudaError_t rms_norm(const float * src, float * dst, int64_t ncols, int64_t nrows, float eps,
-                         cudaStream_t stream) const override {
+                         uint16_t monte_seed, cudaStream_t stream) const override {
         if (nrows == 0) {
             return cudaSuccess;
         }
-        k_rms_norm<A><<<(unsigned) nrows, k_block_size, 0, stream>>>(src, dst, ncols, eps);
+        k_rms_norm<A><<<(unsigned) nrows, k_block_size, 0, stream>>>(src, dst, ncols, eps, monte_seed);
         return cudaGetLastError();
     }
 
@@ -428,7 +465,7 @@ public:
             return cudaSuccess;
         }
         k_soft_max<A><<<(unsigned) nrows, k_block_size, 0, stream>>>(
-            a.src, a.src_shape, a.mask, a.mask_shape, a.scale, a.dst, static_cast<value *>(a.work));
+            a.src, a.src_shape, a.mask, a.mask_shape, a.scale, a.dst, static_cast<value *>(a.work), a.monte_seed);
         return cudaGetLastError();
     }
 

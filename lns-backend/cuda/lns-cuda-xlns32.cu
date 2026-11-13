@@ -30,6 +30,17 @@ using ::pow; using ::sin; using ::sqrt; using ::tanh;
 struct xlns32_arith {
     using value = xlns32;
     static constexpr const char * name = "xlns32";
+    static constexpr const char * sum_mode   = nullptr; // GGML_LNS16_SUM is xlns16-only
+    static constexpr const char * monte_impl = nullptr;
+    struct reduction {
+        using acc = xlns32;
+        struct state {};
+        static constexpr bool stochastic = false;
+        __device__ static state  start(unsigned, uint64_t, uint64_t) { return {}; }
+        __device__ static acc    from(xlns32 v)                     { return v; }
+        __device__ static acc    add(acc a, xlns32 t, state &)      { return xlns32d_add(a, t); }
+        __device__ static xlns32 finish(acc a)                      { return a; }
+    };
     static constexpr value zero    = xlns32_zero;
     static constexpr value neg_inf = xlns32_neg_inf;
 

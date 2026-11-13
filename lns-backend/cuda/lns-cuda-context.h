@@ -122,6 +122,12 @@ public:
 
     const kernel_set & kernels() const { return arith; }
 
+    // Monte mode: reserves the next `draws` draws of the process-wide Monte
+    // sequence (owned by LNS16, ggml-lns.h) and returns their start state.
+    // Ops reserve in graph order, so GPU and CPU-fallback ops draw exactly as
+    // an all-CPU run would. Returns 0 in the other modes.
+    uint16_t reserve_monte(uint64_t draws);
+
     // The stream every op runs on. The first call initializes the device:
     // nothing touches the GPU until an op actually runs, so a selected-out
     // LNSCUDA device costs no VRAM.

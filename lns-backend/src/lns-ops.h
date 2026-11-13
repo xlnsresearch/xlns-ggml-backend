@@ -17,6 +17,9 @@ void f32_to_lns16_row(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst,
 // description, and the LNS_OP_AUDIT JSON records.
 const char * lns16_sum_mode_name(void);
 
+// "pure16" (xlns16monte.cpp) / "bylpvip" in a monte build, else nullptr
+const char * lns16_monte_impl_name(void);
+
 // Phase 1
 void lns_mul_mat(struct ggml_tensor * dst);
 void lns_mul_mat_id(struct ggml_tensor * dst);

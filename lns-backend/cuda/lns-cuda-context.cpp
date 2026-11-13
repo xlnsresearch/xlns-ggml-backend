@@ -5,6 +5,10 @@
 
 #include <cuda_runtime.h>
 
+#ifdef GGML_LNSCUDA_HAS_LNS16
+#include "ggml-lns.h" // Monte state
+#endif
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -247,6 +251,20 @@ void context::init_device() {
     LNS_CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
     std::fprintf(stderr, "ggml-lns-cuda: %s on GPU %d (%s, sm_%d%d, %zu MiB free), weight cache budget %zu MiB\n",
                  name.c_str(), device, prop.name, prop.major, prop.minor, free / MiB, budget / MiB);
+}
+
+uint16_t context::reserve_monte(uint64_t draws) {
+    if (arith.monte_impl() == nullptr) {
+        return 0;
+    }
+#ifdef GGML_LNSCUDA_HAS_LNS16
+    uint16_t start = 0;
+    if (ggml_backend_lns16_monte_reserve(draws, &start)) {
+        return start;
+    }
+#endif
+    (void) draws;
+    GGML_ABORT("ggml-lns-cuda: %s needs an LNS16 backend built with GGML_LNS16_SUM=monte", name.c_str());
 }
 
 cudaStream_t context::stream() {

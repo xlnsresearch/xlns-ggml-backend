@@ -17,6 +17,11 @@
 //     sum of squares) are sequential in element order, like the CPU's
 //     xlns16_vec_dot / xlns16_sum: LNS addition is not associative, so a
 //     parallel tree reduction would give different (if not worse) numbers.
+//     How they accumulate follows the xlns16 summation mode (GGML_LNS16_SUM:
+//     base, monte, lpvip or sum32), as in the CPU backend.
+//   * Monte reductions take random draws. Each call gets the LFSR state where
+//     its first reduction starts (monte_seed); reduction i starts i * draws
+//     later, i.e. in the CPU's sequential order.
 //   * Tensors are contiguous arrays in ggml element order (ne[0] fastest).
 //   * Every call launches asynchronously on the given stream.
 
@@ -49,6 +54,7 @@ struct mul_mat_args {
     float *      dst;
     int64_t      K, M, N;
     int64_t      ne02, ne03, ne12, ne13;
+    uint16_t     monte_seed;
 };
 
 // dst = softmax(src * scale + mask) over rows of src.ne[0]. mask (optional)
@@ -61,6 +67,7 @@ struct soft_max_args {
     float         scale;
     float *       dst;
     void *        work;
+    uint16_t      monte_seed;
 };
 
 // Rotary embedding of src [ne0, ne1 (heads), ne2 (positions), ne3]. cos_sin
@@ -81,6 +88,16 @@ public:
 
     virtual const char * format_name() const = 0; // "xlns16" / "xlns32"
     virtual size_t       value_size()  const = 0; // bytes per LNS value
+
+    // "base" | "monte" | "lpvip" for xlns16, nullptr for xlns32
+    virtual const char * sum_mode()   const = 0;
+    // "pure16" | "bylpvip" for monte, else nullptr
+    virtual const char * monte_impl() const = 0;
+
+    // Random draws these calls consume (0 unless monte).
+    virtual uint64_t mul_mat_draws(const mul_mat_args & args) const = 0;
+    virtual uint64_t soft_max_draws(int64_t ncols, int64_t nrows) const = 0;
+    virtual uint64_t rms_norm_draws(int64_t ncols, int64_t nrows) const = 0;
 
     // Uploads the arithmetic lookup tables to the current device. Must run
     // once per device before any other call.
@@ -114,7 +131,7 @@ public:
 
     // dst = src / sqrt(mean(src^2) + eps) per row of ncols.
     virtual cudaError_t rms_norm(const float * src, float * dst, int64_t ncols, int64_t nrows, float eps,
-                                 cudaStream_t stream) const = 0;
+                                 uint16_t monte_seed, cudaStream_t stream) const = 0;
 
     virtual cudaError_t soft_max(const soft_max_args & args, cudaStream_t stream) const = 0;
 

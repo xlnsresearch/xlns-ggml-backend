@@ -10,6 +10,7 @@
 #include "lns-ops.h"
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace {
@@ -52,8 +53,14 @@ struct lns16_traits : lns::backend_traits_base {
     // its tolerance profile against this string.
     static const char * description() {
         static const std::string desc =
-            std::string("Logarithmic Number System (xlns16, sum=") + lns16_sum_mode_name() + ")";
+            std::string("Logarithmic Number System (xlns16, sum=") + lns16_sum_mode_name() + monte_suffix() + ")";
         return desc.c_str();
+    }
+
+    // ", monte=pure16" / ", monte=bylpvip" in a monte build
+    static std::string monte_suffix() {
+        const char * impl = lns16_monte_impl_name();
+        return impl ? std::string(", monte=") + impl : std::string();
     }
 
     static ggml_guid_t guid() {
@@ -69,12 +76,29 @@ struct lns16_traits : lns::backend_traits_base {
     }
 
     static void log_init() {
-        std::fprintf(stderr, "ggml-lns: LNS16 backend initialized (sum mode: %s)\n", lns16_sum_mode_name());
+        std::fprintf(stderr, "ggml-lns: LNS16 backend initialized (sum mode: %s%s)\n", lns16_sum_mode_name(),
+                     monte_suffix().c_str());
     }
 
     static const char * audit_fields() {
         static const std::string fields = std::string("\"sum_mode\":\"") + lns16_sum_mode_name() + "\",";
         return fields.c_str();
+    }
+
+    // the Monte state functions, for callers that only see the registry
+    static void * proc_address(const char * name) {
+        struct entry { const char * name; void * fn; };
+        static const entry entries[] = {
+            { "ggml_backend_lns16_monte_get_state", (void *) ggml_backend_lns16_monte_get_state },
+            { "ggml_backend_lns16_monte_set_state", (void *) ggml_backend_lns16_monte_set_state },
+            { "ggml_backend_lns16_monte_reserve",   (void *) ggml_backend_lns16_monte_reserve   },
+        };
+        for (const entry & e : entries) {
+            if (std::strcmp(e.name, name) == 0) {
+                return e.fn;
+            }
+        }
+        return nullptr;
     }
 };
 

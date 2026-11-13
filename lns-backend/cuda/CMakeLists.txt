@@ -2,6 +2,7 @@
 #
 # Needs only the CUDA toolkit (nvcc + cudart), not ggml's own CUDA backend.
 # Useful cache variables:
+#   GGML_LNS16_SUM             base|monte|lpvip|sum32 (shared with LNS16)
 #   XLNSCUDA_DIR               xlnscuda checkout (default: next to xlnscpp)
 #   CMAKE_CUDA_ARCHITECTURES   default "native" (the GPUs in this machine)
 #   CMAKE_CUDA_HOST_COMPILER   a host compiler your nvcc accepts, e.g. g++-12
@@ -51,15 +52,31 @@ if (NOT EXISTS "${XLNSCUDA_DIR}/xlns16d.cu")
     message(FATAL_ERROR "GGML_LNSCUDA: XLNSCUDA_DIR='${XLNSCUDA_DIR}' is not an xlnscuda checkout; "
                         "pass -DXLNSCUDA_DIR=/path/to/xlnscuda (run 'git submodule update --init' first)")
 endif()
-# The backend relies on the device lookup tables added to xlnscuda for exact
-# CPU parity (xlns16d_table_init / xlns32d_table_init); fail at configure time,
-# not with a wall of compile errors.
+# The backend relies on xlnscuda's device lookup tables and its Monte / LPVIP
+# reductions (xlns16d_monte.cu, xlns32d_lpvip.cu). Fail at configure time, not
+# with compile errors.
 file(READ "${XLNSCUDA_DIR}/xlns16d.cu" LNS_XLNS16D_SOURCE)
-if (NOT LNS_XLNS16D_SOURCE MATCHES "xlns16d_table_init")
-    message(FATAL_ERROR "GGML_LNSCUDA: ${XLNSCUDA_DIR} predates device table support "
-                        "(xlns16d_table_init); update the xlnscuda submodule")
+if (NOT LNS_XLNS16D_SOURCE MATCHES "xlns16d_table_init" OR NOT EXISTS "${XLNSCUDA_DIR}/xlns16d_monte.cu"
+    OR NOT EXISTS "${XLNSCUDA_DIR}/xlns32d_lpvip.cu")
+    message(FATAL_ERROR "GGML_LNSCUDA: ${XLNSCUDA_DIR} lacks the device tables or the Monte/LPVIP reductions; "
+                        "update the xlnscuda submodule")
 endif()
 target_include_directories(ggml-lnscuda PRIVATE "${XLNSCUDA_DIR}")
+
+# xlns16 summation mode (GGML_LNS16_SUM, shared with LNS16): only the xlns16
+# translation unit gets its definitions.
+lns16_sum_mode_defines(LNS_CUDA16_MODE_DEFS)
+if (LNS_CUDA16_MODE_DEFS)
+    set_property(SOURCE lns-cuda-xlns16.cu APPEND PROPERTY COMPILE_DEFINITIONS ${LNS_CUDA16_MODE_DEFS})
+endif()
+
+# LNS16 owns the Monte random state that LNSCUDA16 draws from (ggml-lns.h).
+if (GGML_LNS)
+    target_link_libraries(ggml-lnscuda PRIVATE ggml-lns)
+    target_compile_definitions(ggml-lnscuda PRIVATE GGML_LNSCUDA_HAS_LNS16)
+elseif (GGML_LNS16_SUM STREQUAL "monte")
+    message(FATAL_ERROR "GGML_LNSCUDA with GGML_LNS16_SUM=monte needs GGML_LNS=ON")
+endif()
 
 # Static cudart: binaries built with LNSCUDA still start on machines without
 # the CUDA toolkit (the LNSCUDA devices then report no GPU and stay hidden).

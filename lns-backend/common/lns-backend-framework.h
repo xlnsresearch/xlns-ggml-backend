@@ -17,7 +17,8 @@
 //
 // Optional members (defaults in backend_traits_base) cover per-instance state
 // (context / create_context), device presence (device_count), memory
-// reporting, a one-time init log and extra audit fields.
+// reporting, a one-time init log, extra audit fields and backend-specific
+// functions exported through the registry (proc_address).
 //
 // The op table is the single source of truth: supports_op and graph_compute
 // both look nodes up in it, so a backend cannot claim an op it does not
@@ -94,6 +95,9 @@ struct backend_traits_base {
 
     // Extra members for the LNS_OP_AUDIT records (see audit_supports_op).
     static const char * audit_fields() { return ""; }
+
+    // ggml_backend_reg_get_proc_address: backend-specific functions by name.
+    static void * proc_address(const char *) { return nullptr; }
 };
 
 // Nodes that only reinterpret memory. Every LNS backend accepts them so that
@@ -333,8 +337,8 @@ private:
         return device();
     }
 
-    static void * reg_get_proc_address(ggml_backend_reg_t, const char *) {
-        return nullptr;
+    static void * reg_get_proc_address(ggml_backend_reg_t, const char * name) {
+        return Traits::proc_address(name);
     }
 
     static constexpr ggml_backend_reg_i reg_iface = {

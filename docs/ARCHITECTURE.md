@@ -10,7 +10,7 @@ backend code; [CUDA.md](CUDA.md) covers the GPU backend in more depth.
 |---|---|---|---|---|
 | `LNS16` | xlnscpp | CPU | xlns16, summation mode chosen at build time (`base` / `monte` / `lpvip` / `sum32`) | `lns-backend/src/` |
 | `LNS32` | xlnscpp | CPU | xlns32 | `lns-backend/src32/` |
-| `LNSCUDA16` | xlnscuda | CUDA GPU | xlns16, bit-identical to `LNS16` built with `base` | `lns-backend/cuda/` |
+| `LNSCUDA16` | xlnscuda | CUDA GPU | xlns16, bit-identical to `LNS16` built in the same mode (`base` / `monte` / `lpvip` / `sum32`) | `lns-backend/cuda/` |
 | `LNSCUDA32` | xlnscuda | CUDA GPU | xlns32, matches `LNS32` (see [CUDA.md](CUDA.md#numerics)) | `lns-backend/cuda/` |
 
 All four are ggml backends of type `ACCEL` that compute on ggml's ordinary
@@ -172,7 +172,8 @@ clearly when xlnscpp is missing.
 | Test | What it proves |
 |---|---|
 | `lns-backend/tests/test-lns-backend.cpp` | each device against float references, per summation profile (`./bin/test-lns-backend LNS16 base`, `LNS32`, `LNSCUDA16 base`, `LNSCUDA32`) |
-| `lns-backend/tests/test-lns-cuda-parity.cpp` | `LNSCUDA16` is bit-identical to `LNS16` (base) and `LNSCUDA32` matches `LNS32`, op by op and through the scheduler fallback chain |
+| `lns-backend/tests/test-lns-cuda-parity.cpp` | `LNSCUDA16` is bit-identical to `LNS16` of the same summation mode (Monte from equal LFSR states) and `LNSCUDA32` matches `LNS32`, op by op and through the scheduler fallback chain |
+| `xlnscuda/tests/chkxlns16d_sum_modes.cu` | device Monte / LPVIP arithmetic is bit-identical to xlnscpp |
 | `lns-backend/tests/test-lns16-sum32.cpp` | the sum32 accumulator's invariants, without ggml |
 | `xlnscuda/tests/chkxlns{16,32}d_table.cu` | the xlnscuda device arithmetic is bit-identical to xlnscpp |
 | `scripts/lns-vs-cpu-quality.sh` | end to end: an LNS backend against a pure-CPU llama.cpp (token divergence, perplexity) |
