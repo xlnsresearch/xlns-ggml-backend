@@ -30,7 +30,9 @@ runs an LLM's compute in LNS arithmetic:
 | LNS32 / LNSCUDA32 | xlns32 (no modes) |
 
 How the backends share one framework, and how to add another library, is in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Measurements (layer-by-layer
+error of every backend and mode against F32, and CPU against GPU) are in
+[experiments/](experiments/).
 
 ---
 

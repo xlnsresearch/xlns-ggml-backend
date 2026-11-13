@@ -19,6 +19,3 @@ results/*
 !results/sum32-evidence/
 results/sum32-evidence/*
 !results/sum32-evidence/*.txt
-!results/cuda-modes-evidence/
-results/cuda-modes-evidence/*
-!results/cuda-modes-evidence/*.md
