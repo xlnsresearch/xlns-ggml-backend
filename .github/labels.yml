@@ -1,0 +1,70 @@
+- name: bug
+  color: "d73a4a"
+  description: Something isn't working
+- name: documentation
+  color: "0075ca"
+  description: Improvements or additions to documentation
+- name: duplicate
+  color: "cfd3d7"
+  description: This issue or pull request already exists
+- name: enhancement
+  color: "a2eeef"
+  description: New feature or request
+- name: good first issue
+  color: "7057ff"
+  description: Good for newcomers
+- name: help wanted
+  color: "008672"
+  description: Extra attention is needed
+- name: invalid
+  color: "e4e669"
+  description: This doesn't seem right
+- name: question
+  color: "d876e3"
+  description: Further information is requested
+- name: wontfix
+  color: "ffffff"
+  description: This will not be worked on
+
+- name: "backend: lns16"
+  color: "1d76db"
+  description: LNS16 backend (xlns16 on the CPU)
+- name: "backend: lns32"
+  color: "5319e7"
+  description: LNS32 backend (xlns32 on the CPU)
+- name: "backend: cuda"
+  color: "76b900"
+  description: LNSCUDA16 / LNSCUDA32 backends (xlnscuda on the GPU)
+- name: sum-mode
+  color: "c5def5"
+  description: xlns16 summation modes (base, monte, lpvip, sum32)
+- name: experiments
+  color: "fbca04"
+  description: Measurements and reports under experiments/
+- name: tests
+  color: "0e8a16"
+  description: Unit and parity tests
+- name: build
+  color: "f9d0c4"
+  description: setup.sh, run.sh and the CMake files
+- name: upstream-sync
+  color: "bfd4f2"
+  description: Pinned ggml / llama.cpp / xlnscpp / xlnscuda commits and the fallback patches
+- name: ci
+  color: "ededed"
+  description: GitHub Actions and repository automation
+- name: dependencies
+  color: "0366d6"
+  description: Dependency updates
+- name: needs-repro
+  color: "e99695"
+  description: Needs steps or a model that reproduce the problem
+- name: in-progress
+  color: "0052cc"
+  description: Someone is working on this; not marked stale
+- name: pinned
+  color: "000000"
+  description: Kept open; not marked stale
+- name: stale
+  color: "dddddd"
+  description: No activity for a while; closes soon

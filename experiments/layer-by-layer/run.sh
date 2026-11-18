@@ -47,7 +47,8 @@ mkdir -p "$OUT_DIR"
 
 # layer-dump binary per tree
 build_dump() {
-    local tree="$1" out="$WORK/ld-$(basename "$1")"
+    local tree="$1" out
+    out="$WORK/ld-$(basename "$1")"
     if [ ! -x "$out" ]; then
         g++ -O2 -std=c++17 -I "$LLAMA_ROOT/include" -I "$LLAMA_ROOT/ggml/include" \
             "$HERE/layer-dump.cpp" -o "$out" \

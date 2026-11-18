@@ -125,6 +125,7 @@ for mode in base monte sum32 lpvip; do
         -DGGML_CUDA=OFF \
         -DCMAKE_BUILD_TYPE=Release \
         -DXLNSCPP_DIR="$XLNSCPP_DIR" || return 1
+    # shellcheck disable=SC2046
     cmake --build . --target test-lns-backend $([ "$LNS_CUDA" -eq 1 ] && echo test-lns-cuda-parity) -j"$JOBS" || return 1
     GGML_LNS_BACKEND=16 ./bin/test-lns-backend LNS16 "$mode" || return 1
     log "    PASS: unit test (LNS16, $mode)"

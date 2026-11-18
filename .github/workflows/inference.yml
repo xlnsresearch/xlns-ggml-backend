@@ -1,0 +1,62 @@
+name: Inference smoke test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sum_mode:
+        description: LNS16 summation mode
+        type: choice
+        options: [sum32, base, monte, lpvip]
+        default: sum32
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MODEL_FILE: SmolLM2-135M-Instruct-Q4_K_M.gguf
+  MODEL_URL: https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf
+  SUM_MODE: ${{ inputs.sum_mode || 'sum32' }}
+
+jobs:
+  smollm2:
+    name: SmolLM2 on LNS16 (${{ inputs.sum_mode || 'sum32' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.MODEL_FILE }}
+          key: model-${{ env.MODEL_FILE }}
+
+      - name: Download the model
+        run: |
+          if [ ! -f "$MODEL_FILE" ]; then
+            curl -fL --retry 3 -o "$MODEL_FILE" "$MODEL_URL"
+          fi
+          ls -l "$MODEL_FILE"
+
+      - uses: hendrikmuhs/ccache-action@v1.2.25
+        with:
+          key: inference-${{ env.SUM_MODE }}
+
+      - name: Build llama.cpp with the LNS backends
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          LNS32_INFERENCE: "0"
+        run: ./setup.sh --sum-mode="$SUM_MODE"
+
+      - name: Check that LNS16 answers Paris
+        run: |
+          ./run.sh --sum-mode="$SUM_MODE" -n 12 -- --temp 0 --seed 1 | tee output.txt
+          grep -q "Paris" output.txt

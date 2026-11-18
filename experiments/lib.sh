@@ -80,7 +80,7 @@ ensure_models() {
 }
 
 write_report() {
-    local out="${@: -1}"
+    local out="${!#}"
     local tmp="$out.tmp"
     LIB_TMP+=("$tmp")
     python3 "${@:1:$#-1}" > "$tmp"

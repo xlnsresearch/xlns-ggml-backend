@@ -1,0 +1,64 @@
+"backend: lns16":
+  - changed-files:
+      - any-glob-to-any-file:
+          - lns-backend/src/**
+          - lns-backend/include/ggml-lns.h
+          - lns-backend/tests/test-lns16-sum32.cpp
+
+"backend: lns32":
+  - changed-files:
+      - any-glob-to-any-file:
+          - lns-backend/src32/**
+          - lns-backend/include/ggml-lns32.h
+
+"backend: cuda":
+  - changed-files:
+      - any-glob-to-any-file:
+          - lns-backend/cuda/**
+          - lns-backend/include/ggml-lns-cuda.h
+          - lns-backend/tests/test-lns-cuda-parity.cpp
+          - docs/CUDA.md
+          - xlnscuda
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - lns-backend/tests/**
+
+experiments:
+  - changed-files:
+      - any-glob-to-any-file:
+          - experiments/**
+          - results/**
+
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - setup.sh
+          - run.sh
+          - "**/CMakeLists.txt"
+          - "**/*.cmake"
+
+upstream-sync:
+  - changed-files:
+      - any-glob-to-any-file:
+          - patches/**
+          - scripts/integrate-lns.sh
+          - scripts/lns-backends.sh
+          - xlnscpp
+          - xlnscuda
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - SETUP.md
+          - CONTRIBUTING.md
+          - docs/**
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+          - .shellcheckrc
+          - ruff.toml

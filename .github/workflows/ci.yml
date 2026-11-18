@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit-tests:
+    name: Unit tests (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [base, monte, lpvip, sum32]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: hendrikmuhs/ccache-action@v1.2.25
+        with:
+          key: unit-tests-${{ matrix.mode }}
+
+      - name: Build and run test-lns-backend
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+        run: ./setup.sh --unit-test --skip-inference --sum-mode=${{ matrix.mode }}
+
+  sum32-invariants:
+    name: sum32 invariants
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Build and run test-lns16-sum32
+        run: |
+          g++ -O2 -std=c++17 -I xlnscpp -I lns-backend/src \
+              lns-backend/tests/test-lns16-sum32.cpp -o test-lns16-sum32
+          ./test-lns16-sum32
+
+  cuda-build:
+    name: CUDA build (${{ matrix.cuda }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container: nvidia/cuda:${{ matrix.cuda }}
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda:
+          - 11.8.0-devel-ubuntu22.04
+          - 12.9.1-devel-ubuntu24.04
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              build-essential ca-certificates ccache cmake git perl
+
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Trust the workspace
+        run: git config --global --add safe.directory '*'
+
+      - uses: hendrikmuhs/ccache-action@v1.2.25
+        with:
+          key: cuda-build-${{ matrix.cuda }}
+          install: "no"
+          job-summary: ""
+
+      - name: Build the CUDA backends and run the CPU tests
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CMAKE_CUDA_COMPILER_LAUNCHER: ccache
+        run: ./setup.sh --cuda --unit-test --skip-inference
