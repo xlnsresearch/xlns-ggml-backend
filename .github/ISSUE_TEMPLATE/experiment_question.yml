@@ -1,0 +1,27 @@
+name: Experiment or results question
+description: A question about a measurement, a report under experiments/, or numbers that don't match
+labels: [question]
+body:
+  - type: input
+    id: experiment
+    attributes:
+      label: Experiment
+      description: The folder or report this is about.
+      placeholder: experiments/op-sensitivity/results/SUMMARY.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What you want to know, or what looks wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: What you ran
+      description: If you re-ran it and got different numbers, the commands, models and hardware you used, and the numbers you got.
+      render: text

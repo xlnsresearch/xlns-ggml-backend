@@ -1,0 +1,32 @@
+name: Feature request
+description: A new op, backend, summation mode, model or tool
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to do
+      description: What you are trying to do, and what is missing or getting in the way.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How you think it could work. If it touches the backends, say which ones.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways you considered, or how you work around it today.
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself.

@@ -1,0 +1,89 @@
+name: Bug report
+description: A build failure, a crash, a failing test or a wrong result
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. The details below are what we need to reproduce it.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      description: The `GGML_LNS_BACKEND` / `--backend` you used.
+      multiple: true
+      options:
+        - LNS16 (CPU)
+        - LNS32 (CPU)
+        - LNSCUDA16 (GPU)
+        - LNSCUDA32 (GPU)
+        - Not sure / build failure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sum-mode
+    attributes:
+      label: Summation mode
+      description: The `--sum-mode` the binary was built with.
+      multiple: true
+      options:
+        - base
+        - monte
+        - lpvip
+        - sum32
+        - Not relevant
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: The GGUF file, if this happened during inference.
+      placeholder: SmolLM2-135M-Instruct-Q4_K_M.gguf
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command, including any environment variables.
+      render: shell
+      placeholder: ./run.sh --sum-mode=sum32 -n 12 -- --temp 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The relevant part of the output or the error. For a build failure, the first error is the most useful part.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, CPU, compiler, and for the GPU backends the GPU, driver and CUDA version (`nvcc --version`).
+      placeholder: |
+        Ubuntu 24.04, x86_64, g++ 13.3
+        RTX 2050, driver 550, CUDA 12.0
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`.

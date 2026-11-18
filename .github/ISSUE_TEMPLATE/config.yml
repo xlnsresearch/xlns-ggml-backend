@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: xlnscpp (LNS arithmetic on the CPU)
+    url: https://github.com/xlnsresearch/xlnscpp/issues
+    about: Problems in the xlns16 / xlns32 arithmetic itself belong in xlnscpp.
+  - name: xlnscuda (LNS arithmetic on the GPU)
+    url: https://github.com/xlnsresearch/xlnscuda/issues
+    about: Problems in the device arithmetic itself belong in xlnscuda.
