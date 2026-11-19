@@ -7,6 +7,7 @@ that produced them so they can be rerun and extended.
 |---|---|
 | [layer-by-layer/](layer-by-layer/) | Where does LNS error enter and how does it grow through an LLM, per backend and summation mode? Does the GPU compute exactly what the CPU computes, at every layer? |
 | [op-sensitivity/](op-sensitivity/) | Which op groups and layers cause the output error of LNS inference, and how few of them need a wider accumulator (sum32) or F32 to get close to the reference? |
+| [dot-product-scaling/](dot-product-scaling/) | How does the error of one LNS dot product grow with its length K in each summation mode, is it bias or noise, and does the synthetic model predict the real ops? |
 
 ## Configurations
 

@@ -232,12 +232,15 @@ def bar_chart(path, title, subtitle, categories, series, xlabel, xlog=False, ref
     return True
 
 
-def scatter(path, title, subtitle, series, xlabel, ylabel, xlog=False, ylog=False, label_top=6):
+def scatter(path, title, subtitle, series, xlabel, ylabel, xlog=False, ylog=False, label_top=6, diag=False):
     pts = [(x, y) for _, _, p in series for x, y, _ in p if (not xlog or x > 0) and (not ylog or y > 0)]
     if not pts:
         return False
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
     xlo, xhi, ylo, yhi = min(xs), max(xs), min(ys), max(ys)
+    if diag:
+        xlo = ylo = min(xlo, ylo)
+        xhi = yhi = max(xhi, yhi)
     if xlog:
         xlo, xhi = 10 ** math.floor(math.log10(xlo)), 10 ** math.ceil(math.log10(xhi))
     if ylog:
@@ -247,6 +250,8 @@ def scatter(path, title, subtitle, series, xlabel, ylabel, xlog=False, ylog=Fals
     ya = Axis(ylo, yhi, ylog, H - MB, MT)
     out = _frame(title, subtitle, [(n, f"l{s}", "line") for n, s, _ in series])
     _axes(out, xa, ya, xlabel, ylabel, mr=mr)
+    if diag:
+        out.append(f'<line class="ref" x1="{xa(xlo):.1f}" y1="{ya(xlo):.1f}" x2="{xa(xhi):.1f}" y2="{ya(xhi):.1f}"/>')
     for _, s, p in series:
         p = [(x, y, t) for x, y, t in p if (not xlog or x > 0) and (not ylog or y > 0)]
         top = sorted(p, key=lambda q: -q[1])[:label_top]

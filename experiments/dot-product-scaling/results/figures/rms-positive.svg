@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 440" width="760" height="440" role="img">
+<title>Accumulation error vs K, positive inputs</title><desc>rms of (computed - exact) / sum|a_i b_i| over 4096 dot products</desc>
+<style>svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s0:#2a78d6;--s1:#eb6834;--s2:#1baf7a;--s3:#eda100;--s4:#e87ba4;--s5:#008300;--s6:#6250d6;--s7:#e34948}@media (prefers-color-scheme: dark){svg{--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s0:#3987e5;--s1:#d95926;--s2:#199e70;--s3:#c98500;--s4:#d55181;--s5:#0ca30c;--s6:#9085e9;--s7:#e66767}}text{font-family:system-ui, -apple-system, "Segoe UI", sans-serif;fill:var(--ink2);font-size:12px}.title{fill:var(--ink);font-size:15px;font-weight:600}.sub{fill:var(--ink2);font-size:12px}.tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}.lab{fill:var(--ink2);font-size:12px}.grid{stroke:var(--grid);stroke-width:1}.axis{stroke:var(--axis);stroke-width:1}.ref{stroke:var(--muted);stroke-width:1}.l0{stroke:var(--s0);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f0{fill:var(--s0)}.l1{stroke:var(--s1);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f1{fill:var(--s1)}.l2{stroke:var(--s2);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f2{fill:var(--s2)}.l3{stroke:var(--s3);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f3{fill:var(--s3)}.l4{stroke:var(--s4);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f4{fill:var(--s4)}.l5{stroke:var(--s5);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f5{fill:var(--s5)}.l6{stroke:var(--s6);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f6{fill:var(--s6)}.l7{stroke:var(--s7);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f7{fill:var(--s7)}</style>
+<rect width="760" height="440" rx="8" style="fill:var(--surface)"/>
+<text class="title" x="76" y="28">Accumulation error vs K, positive inputs</text>
+<text class="sub" x="76" y="48">rms of (computed - exact) / sum|a_i b_i| over 4096 dot products</text>
+<line class="l0" x1="76" y1="68" x2="94" y2="68"/>
+<circle class="f0" cx="85" cy="68" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<text class="lab" x="100" y="72">base</text>
+<line class="l1" x1="153" y1="68" x2="171" y2="68"/>
+<circle class="f1" cx="162" cy="68" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<text class="lab" x="177" y="72">monte</text>
+<line class="l2" x1="237" y1="68" x2="255" y2="68"/>
+<circle class="f2" cx="246" cy="68" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<text class="lab" x="261" y="72">lpvip</text>
+<line class="l3" x1="321" y1="68" x2="339" y2="68"/>
+<circle class="f3" cx="330" cy="68" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<text class="lab" x="345" y="72">sum32</text>
+<line class="l4" x1="405" y1="68" x2="423" y2="68"/>
+<circle class="f4" cx="414" cy="68" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<text class="lab" x="429" y="72">xlns32</text>
+<line class="grid" x1="76" y1="384.0" x2="736" y2="384.0"/>
+<text class="tick" x="68" y="388.0" text-anchor="end">1e-7</text>
+<line class="grid" x1="76" y1="300.6" x2="736" y2="300.6"/>
+<text class="tick" x="68" y="304.6" text-anchor="end">1e-5</text>
+<line class="grid" x1="76" y1="217.1" x2="736" y2="217.1"/>
+<text class="tick" x="68" y="221.1" text-anchor="end">1e-3</text>
+<line class="grid" x1="76" y1="133.7" x2="736" y2="133.7"/>
+<text class="tick" x="68" y="137.7" text-anchor="end">0.1</text>
+<line class="axis" x1="84.0" y1="384" x2="84.0" y2="388"/>
+<text class="tick" x="84.0" y="402" text-anchor="middle">16</text>
+<line class="axis" x1="212.8" y1="384" x2="212.8" y2="388"/>
+<text class="tick" x="212.8" y="402" text-anchor="middle">64</text>
+<line class="axis" x1="341.6" y1="384" x2="341.6" y2="388"/>
+<text class="tick" x="341.6" y="402" text-anchor="middle">256</text>
+<line class="axis" x1="470.4" y1="384" x2="470.4" y2="388"/>
+<text class="tick" x="470.4" y="402" text-anchor="middle">1K</text>
+<line class="axis" x1="599.2" y1="384" x2="599.2" y2="388"/>
+<text class="tick" x="599.2" y="402" text-anchor="middle">4K</text>
+<line class="axis" x1="728.0" y1="384" x2="728.0" y2="388"/>
+<text class="tick" x="728.0" y="402" text-anchor="middle">16K</text>
+<line class="axis" x1="76" y1="384" x2="736" y2="384"/>
+<text class="lab" x="406.0" y="428" text-anchor="middle">dot-product length K</text>
+<text class="lab" transform="translate(16,238.0) rotate(-90)" text-anchor="middle">rms error</text>
+<polyline class="l0" points="84.0,192.8 148.4,186.8 212.8,180.4 277.2,169.8 341.6,154.4 406.0,136.4 470.4,120.8 534.8,109.7 599.2,102.3 663.6,97.8 728.0,95.3"/>
+<circle class="f0" cx="84.0" cy="192.8" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="148.4" cy="186.8" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="212.8" cy="180.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="277.2" cy="169.8" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="341.6" cy="154.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="406.0" cy="136.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="470.4" cy="120.8" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="534.8" cy="109.7" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="599.2" cy="102.3" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="663.6" cy="97.8" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f0" cx="728.0" cy="95.3" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<polyline class="l1" points="84.0,191.9 148.4,185.5 212.8,179.1 277.2,168.4 341.6,155.2 406.0,141.6 470.4,136.3 534.8,140.9 599.2,150.0 663.6,136.6 728.0,125.8"/>
+<circle class="f1" cx="84.0" cy="191.9" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="148.4" cy="185.5" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="212.8" cy="179.1" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="277.2" cy="168.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="341.6" cy="155.2" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="406.0" cy="141.6" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="470.4" cy="136.3" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="534.8" cy="140.9" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="599.2" cy="150.0" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="663.6" cy="136.6" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f1" cx="728.0" cy="125.8" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<polyline class="l2" points="84.0,175.0 148.4,174.1 212.8,182.0 277.2,184.1 341.6,171.5 406.0,165.2 470.4,162.3 534.8,160.4 599.2,159.4 663.6,158.8 728.0,158.4"/>
+<circle class="f2" cx="84.0" cy="175.0" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="148.4" cy="174.1" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="212.8" cy="182.0" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="277.2" cy="184.1" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="341.6" cy="171.5" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="406.0" cy="165.2" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="470.4" cy="162.3" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="534.8" cy="160.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="599.2" cy="159.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="663.6" cy="158.8" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f2" cx="728.0" cy="158.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<polyline class="l3" points="84.0,208.9 148.4,209.2 212.8,209.0 277.2,209.0 341.6,209.1 406.0,209.0 470.4,208.9 534.8,209.3 599.2,209.1 663.6,208.9 728.0,208.6"/>
+<circle class="f3" cx="84.0" cy="208.9" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="148.4" cy="209.2" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="212.8" cy="209.0" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="277.2" cy="209.0" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="341.6" cy="209.1" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="406.0" cy="209.0" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="470.4" cy="208.9" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="534.8" cy="209.3" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="599.2" cy="209.1" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="663.6" cy="208.9" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f3" cx="728.0" cy="208.6" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<polyline class="l4" points="84.0,365.5 148.4,352.1 212.8,339.3 277.2,325.7 341.6,312.5 406.0,299.4 470.4,286.7 534.8,274.5 599.2,261.9 663.6,249.4 728.0,236.7"/>
+<circle class="f4" cx="84.0" cy="365.5" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="148.4" cy="352.1" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="212.8" cy="339.3" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="277.2" cy="325.7" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="341.6" cy="312.5" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="406.0" cy="299.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="470.4" cy="286.7" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="534.8" cy="274.5" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="599.2" cy="261.9" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="663.6" cy="249.4" r="4" style="stroke:var(--surface);stroke-width:2"/>
+<circle class="f4" cx="728.0" cy="236.7" r="4" style="stroke:var(--surface);stroke-width:2"/>
+</svg>

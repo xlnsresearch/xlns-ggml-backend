@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 440" width="760" height="440" role="img">
+<title>Qwen2.5-0.5B: rms_norm on real activations</title><desc>error of 1/rms in %; positive = the sum of squares came out too small, so outputs are too large</desc>
+<style>svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s0:#2a78d6;--s1:#eb6834;--s2:#1baf7a;--s3:#eda100;--s4:#e87ba4;--s5:#008300;--s6:#6250d6;--s7:#e34948}@media (prefers-color-scheme: dark){svg{--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s0:#3987e5;--s1:#d95926;--s2:#199e70;--s3:#c98500;--s4:#d55181;--s5:#0ca30c;--s6:#9085e9;--s7:#e66767}}text{font-family:system-ui, -apple-system, "Segoe UI", sans-serif;fill:var(--ink2);font-size:12px}.title{fill:var(--ink);font-size:15px;font-weight:600}.sub{fill:var(--ink2);font-size:12px}.tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}.lab{fill:var(--ink2);font-size:12px}.grid{stroke:var(--grid);stroke-width:1}.axis{stroke:var(--axis);stroke-width:1}.ref{stroke:var(--muted);stroke-width:1}.l0{stroke:var(--s0);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f0{fill:var(--s0)}.l1{stroke:var(--s1);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f1{fill:var(--s1)}.l2{stroke:var(--s2);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f2{fill:var(--s2)}.l3{stroke:var(--s3);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f3{fill:var(--s3)}.l4{stroke:var(--s4);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f4{fill:var(--s4)}.l5{stroke:var(--s5);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f5{fill:var(--s5)}.l6{stroke:var(--s6);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f6{fill:var(--s6)}.l7{stroke:var(--s7);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}.f7{fill:var(--s7)}</style>
+<rect width="760" height="440" rx="8" style="fill:var(--surface)"/>
+<text class="title" x="76" y="28">Qwen2.5-0.5B: rms_norm on real activations</text>
+<text class="sub" x="76" y="48">error of 1/rms in %; positive = the sum of squares came out too small, so outputs are too large</text>
+<rect class="f0" x="76" y="62" width="12" height="12" rx="3"/>
+<text class="lab" x="94" y="72">base</text>
+<rect class="f1" x="147" y="62" width="12" height="12" rx="3"/>
+<text class="lab" x="165" y="72">monte</text>
+<rect class="f2" x="225" y="62" width="12" height="12" rx="3"/>
+<text class="lab" x="243" y="72">lpvip</text>
+<rect class="f3" x="303" y="62" width="12" height="12" rx="3"/>
+<text class="lab" x="321" y="72">sum32</text>
+<rect class="f4" x="381" y="62" width="12" height="12" rx="3"/>
+<text class="lab" x="399" y="72">xlns32</text>
+<line class="grid" x1="163.3" y1="92" x2="163.3" y2="384"/>
+<text class="tick" x="163.3" y="402" text-anchor="middle">-2</text>
+<line class="grid" x1="282.1" y1="92" x2="282.1" y2="384"/>
+<text class="tick" x="282.1" y="402" text-anchor="middle">0</text>
+<line class="grid" x1="400.9" y1="92" x2="400.9" y2="384"/>
+<text class="tick" x="400.9" y="402" text-anchor="middle">2</text>
+<line class="grid" x1="519.7" y1="92" x2="519.7" y2="384"/>
+<text class="tick" x="519.7" y="402" text-anchor="middle">4</text>
+<line class="grid" x1="638.5" y1="92" x2="638.5" y2="384"/>
+<text class="tick" x="638.5" y="402" text-anchor="middle">6</text>
+<text class="lab" x="441.0" y="428" text-anchor="middle">error of 1/rms (%)</text>
+<text class="lab" x="138" y="144.7" text-anchor="end">layer 0</text>
+<path class="f0" d="M282.1,96.0 H591.9 Q595.9,96.0 595.9,100.0 V107.9 Q595.9,111.9 591.9,111.9 H282.1 Z"/>
+<path class="f1" d="M282.1,113.9 H176.5 Q172.5,113.9 172.5,117.9 V125.7 Q172.5,129.7 176.5,129.7 H282.1 Z"/>
+<path class="f2" d="M282.1,131.7 H322.4 Q326.4,131.7 326.4,135.7 V143.6 Q326.4,147.6 322.4,147.6 H282.1 Z"/>
+<path class="f3" d="M282.1,149.6 H282.1 Q281.3,149.6 281.3,150.4 V164.7 Q281.3,165.5 282.1,165.5 H282.1 Z"/>
+<path class="f4" d="M282.1,167.5 H281.6 Q282.1,167.5 282.1,168.0 V182.8 Q282.1,183.3 281.6,183.3 H282.1 Z"/>
+<text class="lab" x="138" y="242.0" text-anchor="end">layer 12</text>
+<path class="f0" d="M282.1,193.3 H697.5 Q701.5,193.3 701.5,197.3 V205.2 Q701.5,209.2 697.5,209.2 H282.1 Z"/>
+<path class="f1" d="M282.1,211.2 H215.2 Q211.2,211.2 211.2,215.2 V223.1 Q211.2,227.1 215.2,227.1 H282.1 Z"/>
+<path class="f2" d="M282.1,229.1 H308.9 Q312.9,229.1 312.9,233.1 V240.9 Q312.9,244.9 308.9,244.9 H282.1 Z"/>
+<path class="f3" d="M282.1,246.9 H282.1 Q285.2,246.9 285.2,250.0 V259.7 Q285.2,262.8 282.1,262.8 H282.1 Z"/>
+<path class="f4" d="M282.1,264.8 H281.7 Q282.2,264.8 282.2,265.3 V280.2 Q282.2,280.7 281.7,280.7 H282.1 Z"/>
+<text class="lab" x="138" y="339.3" text-anchor="end">layer 23</text>
+<path class="f0" d="M282.1,290.7 H560.6 Q564.6,290.7 564.6,294.7 V302.5 Q564.6,306.5 560.6,306.5 H282.1 Z"/>
+<path class="f1" d="M282.1,308.5 H272.5 Q268.5,308.5 268.5,312.5 V320.4 Q268.5,324.4 272.5,324.4 H282.1 Z"/>
+<path class="f2" d="M282.1,326.4 H296.7 Q300.7,326.4 300.7,330.4 V338.3 Q300.7,342.3 296.7,342.3 H282.1 Z"/>
+<path class="f3" d="M282.1,344.3 H272.5 Q268.5,344.3 268.5,348.3 V356.1 Q268.5,360.1 272.5,360.1 H282.1 Z"/>
+<path class="f4" d="M282.1,362.1 H281.7 Q282.2,362.1 282.2,362.6 V377.5 Q282.2,378.0 281.7,378.0 H282.1 Z"/>
+<line class="axis" x1="282.1" y1="92" x2="282.1" y2="384"/>
+</svg>
